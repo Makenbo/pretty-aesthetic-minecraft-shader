@@ -194,11 +194,13 @@ void main()
     // diffuse = texture2D(shadowtex1, texCoord).rgb + texture2D(shadowtex0, texCoord).rrr;
     // diffuse = texture2D(shadowcolor0, texCoord).rgb;
     // diffuse = shadow;
-    
+
     diffuse = ReinhardtTonemap(diffuse);
 
     float sky = step(1., depth);
     diffuse = mix(diffuse, albedo, sky); // Sky fix
+
+    diffuse = albedo * lightmap.y;
 
     /* DRAWBUFFEERS:0 */
     gl_FragData[0] = vec4(diffuse, 1.);

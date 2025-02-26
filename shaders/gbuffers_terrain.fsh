@@ -11,9 +11,9 @@ uniform sampler2D texture;
 
 void main(){
     // Sample from texture atlas and account for biome color + ambien occlusion
-    vec4 albedo = texture2D(texture, texCoords - vec2(1./1024.*16.)) * color;
-    albedo.a = 1.;
-    // vec4 albedo = vec4(texCoords.rg, 0., 1.);
+    vec4 albedo = texture2D(texture, texCoords /*- vec2(1./1024.*16.)*/) * color;
+    // albedo = color;
+    // albedo.a = 1.;
 
     /* DRAWBUFFERS:012 */
     // Write the values to the color textures
