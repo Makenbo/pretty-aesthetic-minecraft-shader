@@ -32,6 +32,9 @@ const int totalSamples = shadowSampleWidth * shadowSampleWidth;
 const int shadowMapResolution = 1024; // built-in
 const int noiseTextureResolution = 128;
 
+// Fog
+// const vec3 fogCol = ambient;
+
 uniform sampler2D depthtex0;
 uniform sampler2D shadowtex0;
 uniform sampler2D shadowtex1;
@@ -62,7 +65,7 @@ float AdjustTorchLightmap(in float lum)
 
 float AdjustSkyLightmap(in float lum)
 {
-    return lum;
+    // return lum;
     return lum * lum * lum * lum;
 }
 
@@ -178,15 +181,20 @@ void main()
     vec3 lightmapCol = LightmapGetCol(lightmap);
 
     vec3 shadow = ShadowPass(depth);
+
+    // Fog
+    float fogValue = pow(depth, 500.);
     
     //Combine
     vec3 diffuse = albedo * (lightmapCol + lighting * shadow + ambient);
 
     float sky = step(1., depth);
-    diffuse = mix(diffuse, albedo, sky);
+    diffuse = mix(diffuse, albedo, sky); // Sky fix
+    diffuse = mix(diffuse, ambient, fogValue); // Fog
 
     // diffuse = shadow;
     // diffuse = texture2D(shadowtex1, texCoord).rgb + texture2D(shadowtex0, texCoord).rrr;
+    // diffuse = albedo;
 
     diffuse = ReinhardtTonemap(diffuse);
 
