@@ -29,7 +29,7 @@ const vec3 ambient = vec3(0., .05, .15);
 const int shadowSampleWidth = 2 * SHADOW_SAMPLES + 1;
 const int totalSamples = shadowSampleWidth * shadowSampleWidth;
 
-const int shadowMapResolution = 1024; // built-in
+const int shadowMapResolution = 2056; // built-in
 const int noiseTextureResolution = 128;
 
 // Fog
@@ -188,15 +188,17 @@ void main()
     //Combine
     vec3 diffuse = albedo * (lightmapCol + lighting * shadow + ambient);
 
-    float sky = step(1., depth);
-    diffuse = mix(diffuse, albedo, sky); // Sky fix
-    diffuse = mix(diffuse, ambient, fogValue); // Fog
+    // diffuse = mix(diffuse, ambient, fogValue); // Fog
 
     // diffuse = shadow;
     // diffuse = texture2D(shadowtex1, texCoord).rgb + texture2D(shadowtex0, texCoord).rrr;
-    // diffuse = albedo;
-
+    // diffuse = texture2D(shadowcolor0, texCoord).rgb;
+    // diffuse = shadow;
+    
     diffuse = ReinhardtTonemap(diffuse);
+
+    float sky = step(1., depth);
+    diffuse = mix(diffuse, albedo, sky); // Sky fix
 
     /* DRAWBUFFEERS:0 */
     gl_FragData[0] = vec4(diffuse, 1.);
