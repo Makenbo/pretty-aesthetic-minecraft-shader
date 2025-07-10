@@ -9,7 +9,8 @@ vec3 ToDisplay(vec3 col)
     return pow(col, vec3(1./2.2));
 }
 
-void main() {
+void main()
+{
     // Sample and apply gamma correction
    vec3 col = texture2D(colortex0, texCoords).rgb;
    col = ToDisplay(col);

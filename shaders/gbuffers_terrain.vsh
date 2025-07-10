@@ -6,7 +6,8 @@ varying vec4 color;
 
 varying vec2 lightmapCoords;
 
-void main() {
+void main()
+{
     // Transform the vertex
     gl_Position = ftransform();
 
