@@ -16,9 +16,7 @@ vec3 ShadowDistortion(in vec3 position)
     position.z *= .5;
 
     // Higher precision near player
-    // position.z *= 10.;
-    position.z = sigmoidCurve(position.z);
-    // position.z = step(abs(position.z), 1.);
-    // position.z = sign(position.z) * pow(abs(position.z), .3);
+    // position.z = sigmoidCurve(position.z);
+    
     return position;
 }

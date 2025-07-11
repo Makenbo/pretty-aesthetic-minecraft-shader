@@ -37,6 +37,7 @@ uniform sampler2D shadowtex0;
 uniform sampler2D shadowtex1;
 uniform sampler2D shadowcolor0;
 uniform sampler2D noisetex;
+// uniform sampler2D blueNoise;
 
 uniform vec3 sunPosition;   // Direction of the sun (not normalized!)
 uniform int frameCounter;
@@ -97,9 +98,11 @@ vec3 GetShadowSpaceCoord(in float depth)
 
 float GetShadowMask(in sampler2D shadowTex, vec3 shadowSpaceCoord)
 {
+    float shadowSample = texture2D(shadowTex, shadowSpaceCoord.xy).r;
+
     return smoothstep(  shadowSpaceCoord.z - SHADOW_BIAS_END,
                         shadowSpaceCoord.z - SHADOW_BIAS_START,
-                        texture2D(shadowTex, shadowSpaceCoord.xy).r );
+                        shadowSample);
 }
 
 vec3 SampleShadow(in vec3 sampleCoord)
@@ -111,13 +114,20 @@ vec3 SampleShadow(in vec3 sampleCoord)
     return mix(transmittedCol * shadowWithoutTransparent, vec3(1.), shadow);
 }
 
-vec3 ShadowFilter(in vec3 uv)
+vec3 ShadowFilter(in vec3 uv, in float blurScale)
 {
+    // Sample shadow distance
+    // float shadowSample = texture2D(shadowTex, uv.xy).r;
+    // float shadowDist = smoothstep(  shadowSpaceCoord.z - .02,
+    //                                 shadowSpaceCoord.z - SHADOW_BIAS_START,
+    //                                 shadowSample);
+
     // Randomize angle of sample offset
     float angle = texture2D(noisetex, texCoord * 20.).r * 6.28 * frameCounter;
     float cosAngle = cos(angle);
     float sinAngle = sin(angle);
-    mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle) / shadowMapResolution;
+    mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle)
+                    / shadowMapResolution * blurScale;
 
     // Blur
     vec3 result = vec3(0.);
@@ -137,12 +147,15 @@ vec3 ShadowFilter(in vec3 uv)
 vec3 ShadowPass(float depth)
 {
     vec3 shadowSampleCoord = GetShadowSpaceCoord(depth);
+    float shadowMask = GetShadowMask(shadowtex0, shadowSampleCoord);
     // vec3 shadowPass = SampleShadow(shadowSampleCoord);
-    vec3 shadowPass = ShadowFilter(shadowSampleCoord);
-    return shadowPass;
+    return vec3(shadowMask);
+    // vec3 shadowPass = ShadowFilter(shadowSampleCoord, .4);
+    // return shadowPass;
 }
 
-// Tone mapping
+/// Tone mapping ----------------------------------------------
+
 vec3 ReinhardtTonemap(vec3 col)
 {
     return col / (col + 1.0);
@@ -178,7 +191,7 @@ void main()
     vec3 shadow = ShadowPass(depth);
 
     // Fog
-    float fogValue = pow(depth, 500.);
+    // float fogValue = pow(depth, 500.);
     
     // Fade in distant sunlight and sun shadow
     // float shadowCutoff = smoothstep(.70, .85, pow(depth, 500.));
@@ -192,13 +205,14 @@ void main()
     float sky = step(1., depth);
     diffuse = mix(diffuse, albedo, sky); // Sky fix
     // diffuse = mix(diffuse, ambient, fogValue); // Fog
+    // diffuse = mix(diffuse, vec3(.18), fogValue); // Fog
 
     // Debug
-    // diffuse = shadow;
     // diffuse = texture2D(shadowtex0, texCoord).rrr;
-    // diffuse = vec3(sunlightCutoff);
-    vec3 shadowSampleCoord = GetShadowSpaceCoord(depth);
+    // vec3 shadowSampleCoord = GetShadowSpaceCoord(depth);
     // diffuse = texture2D(shadowtex0, shadowSampleCoord.xy).rrr;
+    // diffuse = texture2D(noisetex, texCoord).rgb;
+    diffuse = shadow;
 
     // Tonemap
     diffuse = tonemap(diffuse);
