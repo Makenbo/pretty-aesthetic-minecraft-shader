@@ -21,9 +21,10 @@ const float sunIntensity = 6.;
 const vec3 ambient = vec3(0.02, .05, .12) * .7;
 
 // Shadows
+#define SHADOW_SAMPLES 2
+#define MAX_SHADOW_DIST 4.
 #define SHADOW_BIAS_START .0005
 #define SHADOW_BIAS_END .0015
-#define SHADOW_SAMPLES 2
 const int shadowSampleWidth = 2 * SHADOW_SAMPLES + 1;
 const int totalSamples = shadowSampleWidth * shadowSampleWidth;
 
@@ -114,44 +115,67 @@ vec3 SampleShadow(in vec3 sampleCoord)
     return mix(transmittedCol * shadowWithoutTransparent, vec3(1.), shadow);
 }
 
-vec3 ShadowFilter(in vec3 uv, in float blurScale)
+float SampleShadowDist(in vec3 uv)
 {
-    // Sample shadow distance
-    // float shadowSample = texture2D(shadowTex, uv.xy).r;
-    // float shadowDist = smoothstep(  shadowSpaceCoord.z - .02,
-    //                                 shadowSpaceCoord.z - SHADOW_BIAS_START,
-    //                                 shadowSample);
+    float shadowSample = texture2D(shadowtex0, uv.xy).r;
+    float shadowDist = smoothstep(  uv.z - .025,
+                                    uv.z - .002,
+                                    shadowSample);
 
+    return shadowDist;
+}
+
+vec3 ShadowFilter(in vec3 uv)
+{
     // Randomize angle of sample offset
     float angle = texture2D(noisetex, texCoord * 20.).r * 6.28 * frameCounter;
     float cosAngle = cos(angle);
     float sinAngle = sin(angle);
-    mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle)
-                    / shadowMapResolution * blurScale;
+    mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle) / shadowMapResolution;
 
-    // Blur
+    // Sample and filter shadow distance
+    float shadowDist = 99.;
+    for (int x = -SHADOW_SAMPLES; x <= SHADOW_SAMPLES; x++)
+    {
+        for (int y = -SHADOW_SAMPLES; y <= SHADOW_SAMPLES; y++)
+        {
+            vec2 off = rndRot * vec2(x, y) * MAX_SHADOW_DIST;
+            vec3 sampleCoord = vec3(uv.xy + off, uv.z);
+            sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
+            shadowDist = min(shadowDist, SampleShadowDist(sampleCoord));
+        }
+    }
+    float blurScale = (1. - shadowDist) * 5. + .5;
+    blurScale = min(blurScale, MAX_SHADOW_DIST);
+    // float blurScale = 1. - shadowDist;
+
+    // Sample and filter shadow
     vec3 result = vec3(0.);
     for (int x = -SHADOW_SAMPLES; x <= SHADOW_SAMPLES; x++)
     {
         for (int y = -SHADOW_SAMPLES; y <= SHADOW_SAMPLES; y++)
         {
-            vec2 off = rndRot * vec2(x, y);
+            vec2 off = rndRot * vec2(x, y) * blurScale;
             vec3 sampleCoord = vec3(uv.xy + off, uv.z);
+            sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
             result += SampleShadow(sampleCoord);
         }
     }
     result /= totalSamples;
+    // return vec3(blurScale);
+
+    // result = smoothstep(0., 1., result);
+    // result = smoothstep(0., .2, result);
+    // result = pow(result, vec3(2.));
     return result;
 }
 
 vec3 ShadowPass(float depth)
 {
     vec3 shadowSampleCoord = GetShadowSpaceCoord(depth);
-    float shadowMask = GetShadowMask(shadowtex0, shadowSampleCoord);
     // vec3 shadowPass = SampleShadow(shadowSampleCoord);
-    return vec3(shadowMask);
-    // vec3 shadowPass = ShadowFilter(shadowSampleCoord, .4);
-    // return shadowPass;
+    vec3 shadowPass = ShadowFilter(shadowSampleCoord);
+    return shadowPass;
 }
 
 /// Tone mapping ----------------------------------------------
@@ -182,7 +206,8 @@ void main()
     float depth = texture2D(depthtex0, texCoord).r;
 
     // Lighting
-    float lighting = max(dot(normal, normalize(sunPosition)), 0.); // Phong diffuse
+    // float lighting = max(dot(normal, normalize(sunPosition)), 0.); // Phong diffuse
+    float lighting = max(dot(normal, normalize(sunPosition)) * .8 + .2, 0.); // Phong diffuse
     lighting *= sunIntensity;
 
     vec2 lightmap = pow(texture2D(colortex2, texCoord).rg, vec2(2.2));
@@ -212,7 +237,7 @@ void main()
     // vec3 shadowSampleCoord = GetShadowSpaceCoord(depth);
     // diffuse = texture2D(shadowtex0, shadowSampleCoord.xy).rrr;
     // diffuse = texture2D(noisetex, texCoord).rgb;
-    diffuse = shadow;
+    // diffuse = shadow;
 
     // Tonemap
     diffuse = tonemap(diffuse);
