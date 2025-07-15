@@ -9,11 +9,12 @@ varying vec2 lightmapCoords;
 // The texture atlas
 uniform sampler2D texture;
 
-void main(){
+void main()
+{
     // Sample from texture atlas and account for biome color + ambient occlusion
     vec4 albedo = texture2D(texture, texCoords /*- vec2(1./1024.*16.)*/) * color;
 
-    /* DRAWBUFFERS:012 */
+    /* RENDERTARGETS:0,1,2 */
     // Write the values to the color textures
     gl_FragData[0] = albedo;
     gl_FragData[1] = vec4(normal * .5 + .5, 1.);

@@ -17,8 +17,8 @@ vec3 ShadowDistortion(in vec3 position)
 
 
     // Higher precision near player
-    // distortFac = mix(1., length(position.z), .9);
-    // position.z /= distortFac;
+    distortFac = mix(1., length(position.z), .9);
+    position.z /= distortFac;
     // position.z = sigmoidCurve(position.z);
     
     return position;
