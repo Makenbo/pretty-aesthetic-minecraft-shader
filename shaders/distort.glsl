@@ -8,18 +8,20 @@ float sigmoidCurve(float x)
 
 vec3 ShadowDistortion(in vec3 position)
 {
-    // Higher shadow render distance
-    position.z *= .5;
-
     // Higher resolution near player
-    float distortFac = mix(1., length(position.xy), .9);
-    position.xy /= distortFac;
-
+    vec3 distortFac = vec3(1.);
+    distortFac.xy = vec2(mix(1., length(position.xy), .8));
+    // distortFac.xy *= .1;
+    // position.xy /= distortFac;
 
     // Higher precision near player
-    distortFac = mix(1., length(position.z), .9);
-    position.z /= distortFac;
+    distortFac.z = mix(1., length(position.z), .9);
+    // position.z /= distortFac;
     // position.z = sigmoidCurve(position.z);
+
+    // Higher shadow render distance
+    // position.z *= .5;
+    distortFac.z *= 2.;
     
-    return position;
+    return distortFac;
 }

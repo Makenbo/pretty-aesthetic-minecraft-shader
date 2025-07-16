@@ -17,7 +17,7 @@ const vec3 ambient = vec3(0.02, .05, .12) * .7;
 
 // Shadows
 #define SHADOW_SAMPLES 2
-#define MAX_SHADOW_DIST 3.
+#define MAX_SHADOW_DIST 4.
 #define SHADOW_BIAS_START .0005
 #define SHADOW_BIAS_END .0015
 const int shadowSampleWidth = 2 * SHADOW_SAMPLES + 1;
@@ -100,6 +100,35 @@ vec3 LightmapGetCol(in vec2 lightmap)
 
 /// Shadows ----------------------------------------------
 
+const vec2 poissonDisk2x2[4] = vec2[]
+(
+    vec2(0.25, 0.1),
+    vec2(-0.15, 0.3),
+    vec2(0.35, -0.2),
+    vec2(-0.25, -0.35)
+);
+
+const vec2 poissonDisk4x4[16] = vec2[](
+    vec2(-0.94201624, -0.39906216),
+    vec2( 0.94558609, -0.76890725),
+    vec2(-0.094184101, -0.92938870),
+    vec2( 0.34495938,  0.29387760),
+    vec2(-0.91588581,  0.45771432),
+    vec2(-0.81544232, -0.87912464),
+    vec2(-0.38277543,  0.27676845),
+    vec2( 0.97484398,  0.75648379),
+    vec2( 0.44323325, -0.97511554),
+    vec2( 0.53742981, -0.47373420),
+    vec2(-0.26496911, -0.41893023),
+    vec2( 0.79197514,  0.19090188),
+    vec2(-0.24188840,  0.99706507),
+    vec2(-0.81409955,  0.91437590),
+    vec2( 0.19984126,  0.78641367),
+    vec2( 0.14383161, -0.14100790)
+);
+
+// const int POISSON_SAMPLES = 16;
+
 vec3 GetShadowSpaceCoord(in vec4 world)
 {
     // Convert screenspace coord to shadow space coord
@@ -131,7 +160,7 @@ vec3 SampleShadow(in vec3 sampleCoord, vec3 normal, float colorFac)
 
     // Combine masks
     vec3 result = shadow + transparentObjects * transmittedCol;
-    result += transmittedCol * colorFac + vec3(colorFac*.5);
+    result += transmittedCol * colorFac + vec3(colorFac * .5);
     return result;
     // vec3 result = mix(transmittedCol * shadowNoTransparent, vec3(1.), shadow);
     // return mix(shadowCol.rgb * colorFac + vec3(colorFac*.5), vec3(1.), result);
@@ -158,67 +187,75 @@ float GetFakeGI(float shadowDist, float skyDiffuse)
     return result;
 }
 
-float ShadowDistance(vec3 uv, mat2 rndRot)
+float ShadowDistance(vec3 pos, mat2 rndRot, float blurMult)
 {
     float shadowDist = 99.;
-    for (int x = -SHADOW_SAMPLES; x <= SHADOW_SAMPLES; x++)
+    for (int i = 0; i < 4; i++)
     {
-        for (int y = -SHADOW_SAMPLES; y <= SHADOW_SAMPLES; y++)
-        {
-            vec2 off = rndRot * vec2(x, y) * MAX_SHADOW_DIST;
-            vec3 sampleCoord = vec3(uv.xy + off, uv.z);
-            sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
-            shadowDist = min(shadowDist, SampleShadowDist(sampleCoord));
-        }
+        vec2 off = rndRot * poissonDisk2x2[i] * MAX_SHADOW_DIST * blurMult;
+        vec3 sampleCoord = vec3(pos.xy + off, pos.z);
+        sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
+        shadowDist = min(shadowDist, SampleShadowDist(sampleCoord));   
     }
     return shadowDist;
 }
 
-vec3 ShadowFilter(in vec3 uv, vec3 normal, float skyDiffuse)
+vec3 ShadowFilter(in vec3 uv, vec3 normal, float skyDiffuse, vec3 texelSize)
 {
     // Randomize angle of sample offset
     float angle = texture2D(noisetex, texCoord * 20.).r * 6.28 * frameCounter;
     float cosAngle = cos(angle);
     float sinAngle = sin(angle);
-    float distortFac = mix(1., length(uv.xy), .9);
-    distortFac = 1.; // TODO
-    mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle) / (shadowMapResolution / distortFac);
+    mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle) / texelSize.x;
 
     // Calculate distance to the occluder
-    // float shadowDist = ShadowDistance(uv, rndRot);
+    float shadowDist = ShadowDistance(uv, rndRot, 2. * (texelSize.z / shadowMapResolution));
 
-    // float blurScale = (1. - shadowDist) * 5. + .5;
-    float blurScale = 1.;
-    // blurScale = min(blurScale, MAX_SHADOW_DIST);
+    float blurScale = (1. - shadowDist) * 5. + 1.;
+    // float blurScale = 1.;
+    blurScale = min(blurScale, MAX_SHADOW_DIST);
     // float fakeGI = GetFakeGI(shadowDist, skyDiffuse);
 
     // Sample and filter shadow
     vec3 result = vec3(0.);
-    for (int x = -SHADOW_SAMPLES; x <= SHADOW_SAMPLES; x++)
+    for (int i = 0; i < 16; i++)
     {
-        for (int y = -SHADOW_SAMPLES; y <= SHADOW_SAMPLES; y++)
-        {
-            vec2 off = rndRot * vec2(x, y) * blurScale;
-            vec3 sampleCoord = vec3(uv.xy + off, uv.z);
-            sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
-            result += SampleShadow(sampleCoord, normal, 0.);
-        }
+        vec2 off = rndRot * poissonDisk4x4[i] * blurScale;
+        vec3 sampleCoord = vec3(uv.xy + off, uv.z);
+        sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
+        result += SampleShadow(sampleCoord, normal, 0.);
     }
-    result /= totalSamples;
-    // return vec3(fakeGI);
+    result /= 16.;
+
+    // return vec3(shadowDist);
 
     // result = smoothstep(0., 1., result);
-    // result = smoothstep(0., .2, result);
     // result = pow(result, vec3(2.));
-    // return vec3(blurScale);
+    // return vec3(shadowDist);
+
     return result;
 }
 
-vec3 ShadowPass(vec4 worldUV, vec3 normal, float skyDiffuse)
+vec3 ShadowPass(vec4 worldPos, vec3 normal, float skyDiffuse)
 {
-    vec3 shadowSampleCoord = GetShadowSpaceCoord(worldUV);
+    // Get shadow sample coordinates
+
+    // Convert screenspace coord to shadow space coord
+    vec4 shadowSpace = shadowProjection * shadowModelView * worldPos;
+
+    // Get texel size after distortion
+    vec3 distortFac = ShadowDistortion(shadowSpace.xyz);
+    shadowSpace.xyz /= distortFac;
+    
+    vec3 shadowSampleCoord = shadowSpace.xyz * .5 + .5;
+
+    // distortFac.z *= .5;
+    vec3 texelSize = vec3(shadowMapResolution) * distortFac * 5.;
+
+    // Filter shadows
     // vec3 shadowPass = SampleShadow(shadowSampleCoord, 0.);
-    vec3 shadowPass = ShadowFilter(shadowSampleCoord, normal, skyDiffuse);
+    vec3 shadowPass = ShadowFilter(shadowSampleCoord, normal, skyDiffuse, texelSize);
+    // return texelSize;
     return shadowPass;
 }
 
