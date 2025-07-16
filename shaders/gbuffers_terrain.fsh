@@ -1,13 +1,20 @@
 #version 120
 
+#include "constants.glsl"
+
+// Attributes
+
 varying vec2 texCoords;
 varying vec3 normal;
 varying vec4 color;
 
 varying vec2 lightmapCoords;
 
-// The texture atlas
-uniform sampler2D texture;
+// Uniforms
+
+uniform sampler2D texture;  // The texture atlas
+
+// ---------------------------------------------------
 
 void main()
 {

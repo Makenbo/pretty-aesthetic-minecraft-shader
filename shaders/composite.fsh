@@ -1,5 +1,6 @@
 #version 120
 #include "distort.glsl"
+#include "constants.glsl"
 
 // FS attributes
 varying vec2 texCoord;
@@ -24,6 +25,12 @@ const vec3 ambient = vec3(0.02, .045, .1) * .75;
 const int shadowSampleWidth = 2 * SHADOW_SAMPLES + 1;
 const int totalSamples = shadowSampleWidth * shadowSampleWidth;
 
+// Ambient occlusion
+const float ambientOcclusionLevel = 1.;
+
+// Round corners
+#define DEPTH_BLUR_MARGIN .001
+
 // Built-in resolutions
 const int shadowMapResolution = 2056;
 const int noiseTextureResolution = 128;
@@ -37,8 +44,8 @@ uniform sampler2D colortex2;    // lightmap
 
 /*
 const int colortex0Format = RGBA16;
-const int colortex1Format = RGBA16;
-const int colortex2Format = RGB16;
+const int colortex1Format = RGB8;
+const int colortex2Format = RGB8;
 */
 
 // Built-in textures
@@ -54,8 +61,11 @@ uniform sampler2D noisetex;
 // const bool shadowcolor0Nearest = true;
 
 // Constants
-uniform vec3 sunPosition;   // Direction of the sun (not normalized!)
+uniform vec3 sunPosition;   // Direction of the sun
+                            // Not normalized and in view space!
 uniform int frameCounter;
+uniform float viewWidth;
+uniform float viewHeight;
 uniform float far;
 uniform vec3 fogColor;
 
@@ -66,9 +76,19 @@ uniform mat4 shadowProjection;
 
 /// Gamma conversion ----------------------------------------------
 
+float ToLinear(in float col)
+{
+    return pow(col, 2.2);
+}
+
 vec3 ToLinear(in vec3 col)
 {
     return pow(col, vec3(2.2));
+}
+
+vec4 ToLinear(in vec4 col)
+{
+    return pow(col, vec4(2.2));
 }
 
 /// Lightmap ------------------------------------------------
@@ -79,7 +99,7 @@ vec2 AdjustLightmap(in vec2 lightmap)
     lightmap.x *= 5.;
 
     // Sky light
-    lightmap.y = pow(lightmap.y, 4.);
+    lightmap.y = pow(lightmap.y, 2.);
     // lightmap.y = pow(lightmap.y, 5.);
 
     return lightmap;
@@ -99,34 +119,73 @@ vec3 LightmapGetCol(in vec2 lightmap)
             lightmap.y * skyCol;
 }
 
+// Round corners ---------------------------------------------
+
+#define DEPTH_BLUR_SCALE 15.
+
+vec3 BlurRenderPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth)
+{    
+    float angle = texture2D(noisetex, uv * 20.).r * 6.28 * frameCounter;
+    float cosAngle = cos(angle);
+    float sinAngle = sin(angle);
+    mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle);
+
+    vec3 outCol = vec3(0.);
+    int weight = 0;
+
+    for (int i = 0; i < 16; i++)
+    {
+        // Get randomized poisson offset
+        vec2 off = rndRot * poissonDisk4x4[i] * DEPTH_BLUR_SCALE
+                   * (1. - pow(origDepth, 150.));
+        off /= vec2(viewWidth, viewHeight);
+
+        // Get depth
+        float myDepth = texture2D(depthtex0, uv + off).r;
+
+        // Add up
+        if (abs(myDepth - origDepth) < DEPTH_BLUR_MARGIN)
+        {
+            outCol += texture2D(tex, uv + off).xyz;
+            weight++;
+        }
+    }
+
+    return outCol / weight;
+}
+
+float BlurAOPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth)
+{    
+    float angle = texture2D(noisetex, uv * 20.).r * 6.28 * frameCounter;
+    float cosAngle = cos(angle);
+    float sinAngle = sin(angle);
+    mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle);
+
+    float outCol = 0.;
+    int weight = 0;
+
+    for (int i = 0; i < 16; i++)
+    {
+        // Get randomized poisson offset
+        vec2 off = rndRot * poissonDisk4x4[i] * DEPTH_BLUR_SCALE
+                   * (1. - pow(origDepth, 150.));
+        off /= vec2(viewWidth, viewHeight);
+
+        // Get depth
+        float myDepth = texture2D(depthtex0, uv + off).r;
+
+        // Add up
+        if (abs(myDepth - origDepth) < DEPTH_BLUR_MARGIN)
+        {
+            outCol += ToLinear( texture2D(tex, uv + off).a );
+            weight++;
+        }
+    }
+
+    return outCol / weight;
+}
+
 /// Shadows ----------------------------------------------
-
-const vec2 poissonDisk2x2[4] = vec2[]
-(
-    vec2(0.25, 0.1),
-    vec2(-0.15, 0.3),
-    vec2(0.35, -0.2),
-    vec2(-0.25, -0.35)
-);
-
-const vec2 poissonDisk4x4[16] = vec2[](
-    vec2(-0.94201624, -0.39906216),
-    vec2( 0.94558609, -0.76890725),
-    vec2(-0.094184101, -0.92938870),
-    vec2( 0.34495938,  0.29387760),
-    vec2(-0.91588581,  0.45771432),
-    vec2(-0.81544232, -0.87912464),
-    vec2(-0.38277543,  0.27676845),
-    vec2( 0.97484398,  0.75648379),
-    vec2( 0.44323325, -0.97511554),
-    vec2( 0.53742981, -0.47373420),
-    vec2(-0.26496911, -0.41893023),
-    vec2( 0.79197514,  0.19090188),
-    vec2(-0.24188840,  0.99706507),
-    vec2(-0.81409955,  0.91437590),
-    vec2( 0.19984126,  0.78641367),
-    vec2( 0.14383161, -0.14100790)
-);
 
 // const int POISSON_SAMPLES = 16;
 
@@ -139,14 +198,11 @@ float GetShadowMask(in sampler2D shadowTex, vec3 shadowSpaceCoord, float bias)
                         shadowSample);
 }
 
-vec3 SampleShadow(in vec3 sampleCoord, vec3 normal, float bias, float colorFac)
+vec3 SampleShadow(in vec3 sampleCoord, float phongDiff, float bias, float colorFac)
 {
-    // Phong diffuse
-    float phongMask = max(dot(normal, normalize(sunPosition)), 0.);
-
     // Shadow masks
-    float shadow =         GetShadowMask(shadowtex0, sampleCoord, bias) * phongMask;
-    float shadowNoTransp = GetShadowMask(shadowtex1, sampleCoord, bias) * phongMask;
+    float shadow =         GetShadowMask(shadowtex0, sampleCoord, bias) * phongDiff;
+    float shadowNoTransp = GetShadowMask(shadowtex1, sampleCoord, bias) * phongDiff;
     vec4 shadowCol = texture2D(shadowcolor0, sampleCoord.xy);
     vec3 transmittedCol = shadowCol.rgb + (1. - shadowCol.a);
     float transparentObjects = shadowNoTransp - shadow;
@@ -195,7 +251,7 @@ float ShadowDistance(vec3 pos, mat2 rndRot, float blurMult)
     return shadowDist;
 }
 
-vec3 ShadowFilter(in vec3 shadowCoord, vec3 normal, float skyDiffuse, vec3 texelSize)
+vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texelSize)
 {
     // Randomize angle of sample offset
     float angle = texture2D(noisetex, texCoord * 20.).r * 6.28 * frameCounter;
@@ -225,7 +281,7 @@ vec3 ShadowFilter(in vec3 shadowCoord, vec3 normal, float skyDiffuse, vec3 texel
         vec2 off = rndRot * poissonDisk4x4[i] * blurScale;
         vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
         sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
-        result += SampleShadow(sampleCoord, normal, shadowBias, 0.);
+        result += SampleShadow(sampleCoord, phongDiff, shadowBias, 0.);
     }
     result /= 16.;
 
@@ -255,9 +311,12 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float skyDiffuse)
     vec3 texelSize = distortFac;
     texelSize *= 8.;
 
+    // Get Phong diffuse
+    float phongMask = max(dot(normal, normalize(sunPosition)), 0.);
+
     // Filter shadows
     // vec3 shadowPass = SampleShadow(shadowSampleCoord, normal, .001, 0.);
-    vec3 shadowPass = ShadowFilter(shadowSampleCoord, normal, skyDiffuse, texelSize);
+    vec3 shadowPass = ShadowFilter(shadowSampleCoord, phongMask, skyDiffuse, texelSize);
     // return texelSize;
     return shadowPass;
 }
@@ -312,11 +371,10 @@ void main()
 {
     // Get render passes ----------------------------------------
 
-    vec3 albedo = ToLinear( texture2D(colortex0, texCoord).rgb );
+    vec4 albedoPass = ToLinear( texture2D(colortex0, texCoord) );
+    vec3 albedo = albedoPass.rgb;
+    float vanillaAO = albedoPass.a;
 
-    vec3 normal = texture2D(colortex1, texCoord).rgb;
-    normal = normalize(normal * 2. - 1.);
-    
     float depth = texture2D(depthtex0, texCoord).r;
 
     // Get coordinate spaces
@@ -326,6 +384,12 @@ void main()
     vec4 world = gbufferModelViewInverse * vec4(view, 1.);
 
     float correctedDepth = length(view) / far;
+    
+    // vec3 normal = texture2D(colortex1, texCoord).rgb;
+    vec3 normal = BlurRenderPass(colortex1, texCoord, depthtex0, depth);
+    normal = normalize(normal * 2. - 1.);
+
+    vanillaAO = BlurAOPass(colortex0, texCoord, depthtex0, depth);
 
     // Lighting -------------------------------------------------
 
@@ -346,8 +410,9 @@ void main()
     // Combine ---------------------------------------------------
 
     vec3 sunlight = diffuse * sunColor * sunIntensity;
-    vec3 col = albedo * (lightmapCol + sunlight + ambient);
+    vec3 col = albedo * (lightmapCol + sunlight + ambient) * vanillaAO;
 
+    // col = col * (normal * .5 + .75);
     col = AddFog(col, correctedDepth);
 
     float sky = step(1., depth);
@@ -362,8 +427,7 @@ void main()
     // col = texture2D(shadowtex0, shadowSampleCoord.xy * distortFac).rrr;
     // col = texture2D(noisetex, texCoord).rgb;
     // col = texture2D(shadowtex0, texCoord).rrr;
-    // col = vec3(normal);
-    col = col * (normal * .3 + .85);
+    // col = vec3(vanillaAO);
 
     // Tonemap -----------------------------------------------------
     col = tonemap(col);
