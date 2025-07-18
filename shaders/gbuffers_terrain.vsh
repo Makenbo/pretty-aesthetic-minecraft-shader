@@ -1,10 +1,13 @@
 #version 120
 
+in vec3 mc_Entity;
+
 varying vec2 texCoords;
 varying vec3 normal;
 varying vec4 color;
 
 varying vec2 lightmapCoords;
+varying vec2 entity;
 
 void main()
 {
@@ -18,4 +21,6 @@ void main()
 
     lightmapCoords = mat2(gl_TextureMatrix[1]) * gl_MultiTexCoord1.st;
     lightmapCoords = (lightmapCoords * 33.05 / 32.) - (1.05 /32.);
+
+    entity = mc_Entity.xy;
 }

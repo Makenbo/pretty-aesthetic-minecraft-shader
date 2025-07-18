@@ -1,19 +1,23 @@
 #version 120
 
+#include "util/post_col.glsl"
+
 varying vec2 texCoords;
 
 uniform sampler2D colortex0;
 
-vec3 ToDisplay(vec3 col)
-{
-    return pow(col, vec3(1./2.2));
-}
+// Custom textures
+// uniform sampler2D depthtex2; // LUT
 
 void main()
 {
-    // Sample and apply gamma correction
-   vec3 col = texture2D(colortex0, texCoords).rgb;
-   col = ToDisplay(col);
+    vec3 col = texture2D(colortex0, texCoords).rgb;
 
-   gl_FragColor = vec4(col, 1.0f);
+    // Gamma correction
+    // col = ToDisplay(col);
+
+    // Apply look LUT
+    // col = LookupColor(depthtex2, col);
+
+    gl_FragColor = vec4(col, 1.0f);
 }
