@@ -1,4 +1,4 @@
-#version 120
+#version 420
 #include "distort.glsl"
 #include "constants.glsl"
 #include "util/post_col.glsl"
@@ -22,7 +22,7 @@ const vec3 ambient = vec3(0.02, .045, .1) * .75;
 
 // Shadows
 #define SHADOW_SAMPLES 2
-#define MAX_SHADOW_DIST 4.
+#define MAX_SHADOW_BLUR 5.
 #define SHADOW_BIAS_START .0005
 #define SHADOW_BIAS_END .0001
 const int shadowSampleWidth = 2 * SHADOW_SAMPLES + 1;
@@ -35,7 +35,7 @@ const float ambientOcclusionLevel = 1.;
 #define DEPTH_BLUR_MARGIN .001
 
 // Built-in resolutions
-const int shadowMapResolution = 1024;
+const int shadowMapResolution = 2048;
 const int noiseTextureResolution = 128;
 
 /// Uniforms --------------------------------------------------------
@@ -50,7 +50,7 @@ uniform sampler2D colortex3;    // water
 const int colortex0Format = RGBA8;
 const int colortex1Format = RGB16;
 const int colortex2Format = RGB16;
-const int colortex3Format = RGB8;
+const int colortex3Format = RGB16;
 */
 
 uniform sampler2D depthtex2;    // LUT
@@ -66,6 +66,7 @@ uniform sampler2D noisetex;
 // const bool shadowtex0Nearest = true;
 // const bool shadowtex1Nearest = true;
 // const bool shadowcolor0Nearest = true;
+// const bool generateShadowMipmap = true;
 
 // Constants
 uniform vec3 sunPosition;   // Direction of the sun
@@ -76,6 +77,7 @@ uniform float viewHeight;
 uniform float far;
 uniform vec3 fogColor;
 uniform vec3 fogDensity;
+uniform int blockEntityId;
 
 uniform mat4 gbufferProjectionInverse;
 uniform mat4 gbufferModelViewInverse;
@@ -180,38 +182,37 @@ float BlurAOPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth)
 
 /// Shadows ----------------------------------------------
 
-float GetShadowMask(in sampler2D shadowTex, vec3 shadowSpaceCoord, float bias)
+float GetShadowMask(in sampler2D shadowTex, vec3 shadowSpaceCoord, float bias, float lod)
 {
-    float shadowSample = texture2D(shadowTex, shadowSpaceCoord.xy).r;
+    float shadowSample = texture2D(shadowTex, shadowSpaceCoord.xy, 0.).r;
+    // float shadowSample = textureLod(shadowTex, shadowSpaceCoord.xy, lod).r;
 
     return smoothstep(  shadowSpaceCoord.z - bias,
                         shadowSpaceCoord.z - bias,
                         shadowSample);
 }
 
-vec3 SampleShadow(in vec3 sampleCoord, float phongDiff, float bias, float colorFac)
+vec3 SampleShadow(in vec3 sampleCoord, float phongDiff, float bias, float colorFac, float lod)
 {
     // Shadow masks
-    float shadow =         GetShadowMask(shadowtex0, sampleCoord, bias) * phongDiff;
-    float shadowNoTransp = GetShadowMask(shadowtex1, sampleCoord, bias) * phongDiff;
+    float shadow =         GetShadowMask(shadowtex0, sampleCoord, bias, lod) * phongDiff;
+    float shadowNoTransp = GetShadowMask(shadowtex1, sampleCoord, bias, lod) * phongDiff;
     vec4 shadowCol = texture2D(shadowcolor0, sampleCoord.xy);
     vec3 transmittedCol = shadowCol.rgb + (1. - shadowCol.a);
     float transparentObjects = shadowNoTransp - shadow;
 
     // Combine masks
     vec3 result = shadow + transparentObjects * transmittedCol;
-    result += transmittedCol * colorFac + vec3(colorFac * .5);
+    // result += transmittedCol * colorFac + vec3(colorFac * .5);
+    
     // return vec3(shadow);
     return result;
-    
-    // vec3 result = mix(transmittedCol * shadowNoTransp, vec3(1.), shadow);
-    // return mix(shadowCol.rgb * colorFac + vec3(colorFac*.5), vec3(1.), result);
-    // return mix(transmittedCol * shadowNoTransp, vec3(1.), shadow);
 }
 
 float SampleShadowDist(in vec3 uv)
 {
     float shadowSample = texture2D(shadowtex0, uv.xy).r;
+    // float shadowSample = textureLod(shadowtex0, uv.xy, 0.).r;
     float shadowDist = smoothstep(  uv.z - .025,
                                     uv.z - .002,
                                     shadowSample);
@@ -232,9 +233,9 @@ float GetFakeGI(float shadowDist, float skyDiffuse)
 float ShadowDistance(vec3 pos, mat2 rndRot, float blurMult)
 {
     float shadowDist = 99.;
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 16; i++)
     {
-        vec2 off = rndRot * poissonDisk2x2[i] * MAX_SHADOW_DIST * blurMult;
+        vec2 off = rndRot * poissonDisk4x4[i] * MAX_SHADOW_BLUR * blurMult;
         vec3 sampleCoord = vec3(pos.xy + off, pos.z);
         sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
         shadowDist = min(shadowDist, SampleShadowDist(sampleCoord));   
@@ -251,19 +252,23 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
     mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle)
                   / (texelSize.x * shadowMapResolution);
 
+
     // Calculate distance to the occluder
     float shadowDist = ShadowDistance(shadowCoord, rndRot, 6. * texelSize.x);
 
     float blurScale = (1. - shadowDist) * 6. + 1.;
-    blurScale = min(blurScale, MAX_SHADOW_DIST);
+    blurScale = min(blurScale, MAX_SHADOW_BLUR);
     // float blurScale = 1.;
     // float fakeGI = GetFakeGI(shadowDist, skyDiffuse);
+
+    // float lod = max(log(blurScale - 4.), 0.);
+    // float lod = max(pow(blurScale - 4., 2.), 0.);
+    // float lod = sqrt(blurScale * .5);
+    float lod = 0.;
 
     // Get relative shadow bias
     float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
     shadowBias *= .00025;
-    // float shadowBias = .0003;
-    // float shadowBias = (1. - texelSize.z) * .005;
 
     // Sample and filter shadow
     vec3 result = vec3(0.);
@@ -272,11 +277,11 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
         vec2 off = rndRot * poissonDisk4x4[i] * blurScale;
         vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
         sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
-        result += SampleShadow(sampleCoord, phongDiff, shadowBias, 0.);
+        result += SampleShadow(sampleCoord, phongDiff, shadowBias, 0., lod);
     }
     result /= 16.;
 
-    // return vec3(blurScale);
+    // return vec3(lod);
 
     // result = smoothstep(0., 1., result);
     // result = pow(result, vec3(2.));
@@ -314,15 +319,23 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float skyDiffuse)
 
 /// Fog ----------------------------------------------------
 
-vec3 AddFog(vec3 diffuse, float depth)
+vec3 AddFog(vec3 diffuse, vec3 view)
 {
+    const vec3 sunCol = vec3(1., .7, .5);
+
+    float depth = length(view) / far;
+
     // float fogFac = exp(-FOG_DENSITY * (1. - depth)) * depth;
     float fogFac = pow(depth, FOG_DENSITY);
     fogFac = tonemap(fogFac * 5.) * 1.1;
     fogFac = min(fogFac, 1.);
-    vec3 fogCol = pow(fogColor, vec3(2.2)); // Fog
+
+    float sunTintFac = max(dot(normalize(sunPosition), normalize(view)), 0.);
+    sunTintFac = pow(sunTintFac, 5.);
+    vec3 fogCol = pow(fogColor, vec3(2.2));
+    fogCol = mix(fogCol, sunCol, sunTintFac);
+
     return mix(diffuse, fogCol, vec3(fogFac));
-    // return vec3(1.);
 }
 
 /// Main ----------------------------------------------
@@ -375,7 +388,7 @@ void main()
     // worldNormals = normalize(worldNormals);
     // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
 
-    col = AddFog(col, viewDepth);
+    col = AddFog(col, view);
 
     float sky = step(1., depth);
     col = mix(col, albedo, sky); // Seperate the sky
@@ -387,9 +400,9 @@ void main()
     // float distortFac = mix(1., length(shadowSampleCoord.xy), .9);
     // col.rg = vec2(fract(shadowSampleCoord.xy*shadowMapResolution/distortFac));
     // col = texture2D(shadowtex0, shadowSampleCoord.xy * distortFac).rrr;
-    // col = texture2D(colortex3, texCoord).rgb;
+    // col = max(texture2D(colortex3, texCoord).rgb, vec3(0.));
     // col = texture2D(shadowtex0, texCoord).rrr;
-    // col = vec3(worldNormals * .25 + .875);
+    // col = vec3(diffuse);
     
     // Post --------------------------------------------------------
 

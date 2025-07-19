@@ -54,7 +54,7 @@ vec3 tonemapInverse(vec3 col)
 
 // LUT ---------------------------------------------
 
-// Taken from Spectrum by Zombye
+// Original version from Spectrum by Zombye
 // https://github.com/zombye/spectrum/blob/master/shaders/program/post/final.glsl
 vec3 LookupColor(sampler2D lookupTable, vec3 color)
 {
@@ -68,11 +68,11 @@ vec3 LookupColor(sampler2D lookupTable, vec3 color)
     vec2 c0 = vec2(i0 % lutTile.x, i0 / lutTile.x);
     vec2 c1 = vec2(i1 % lutTile.x, i1 / lutTile.x);
 
-    vec2 c = color.rg * ((lutSize - 1.0) / (lutSize * lutTile)) + (0.5 / (lutSize * lutTile));
+    vec2 rgUV = color.rg * ((lutSize - 1.0) / (lutSize * lutTile)) + (0.5 / (lutSize * lutTile));
 
     return mix(
-        texture2D(lookupTable, c0 / lutTile + c).rgb,
-        texture2D(lookupTable, c1 / lutTile + c).rgb,
+        texture2D(lookupTable, c0 / lutTile + rgUV).rgb,
+        texture2D(lookupTable, c1 / lutTile + rgUV).rgb,
         color.b - i0
     );
 }

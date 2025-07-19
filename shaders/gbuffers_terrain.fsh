@@ -1,15 +1,15 @@
-#version 120
+#version 420
 
 #include "constants.glsl"
 
 // Attributes
 
-varying vec2 texCoords;
-varying vec3 normal;
-varying vec4 color;
+in vec2 texCoords;
+in vec3 normal;
+in vec4 color;
 
-varying vec2 lightmapCoords;
-varying vec2 entity;
+in vec2 lightmapCoords;
+flat in int entity;
 
 // Uniforms
 
@@ -27,5 +27,5 @@ void main()
     gl_FragData[0] = albedo;
     gl_FragData[1] = vec4(normal * .5 + .5, 1.);
     gl_FragData[2] = vec4(lightmapCoords, 0., 1.);
-    gl_FragData[3] = vec4(entity, 0., 0.);
+    gl_FragData[3] = vec4(entity == 10009 ? 1. : 0., 0., 0., 0.);
 }
