@@ -1,3 +1,7 @@
+/*
+    Post blurring - downscale
+*/
+
 #version 420
 
 #include "util/post_col.glsl"
@@ -8,25 +12,16 @@ in vec2 texCoord;
 
 /// Custom textures -----------------------------------------------
 
-uniform sampler2D colortex0;    // Linear render
+uniform sampler2D colortex6;    // Low res luma mask to blur
 
-uniform sampler2D depthtex2; // LUT
+/*
+const int colortex6Format = R8;
+*/
 
 void main()
 {
-    vec3 col = texture2D(colortex0, texCoord).rgb;
+    float lumMask = texture2D(colortex6, texCoord).r;
 
-    // Post --------------------------------------------------------
-
-    // Tonemap
-    // col = tonemap(col);
-    
-    // Gamma correction
-    // col = ToDisplay(col);
-
-    // Apply look LUT
-    // col = LookupColor(depthtex2, col);
-
-    /* RENDERTARGETS:0 */
-    gl_FragData[0] = vec4(col, 1.);
+    /* RENDERTARGETS:7 */
+    gl_FragData[0] = vec4(lumMask, 0., 0., 1.);
 }

@@ -1,13 +1,13 @@
 #version 420
 
-// in vec3 mc_Entity;
+in vec2 mc_Entity;
 
 out vec2 texCoords;
 out vec3 normal;
 out vec4 color;
+out vec2 entityID;
 
 out vec2 lightmapCoords;
-// flat out int entity;
 
 void main()
 {
@@ -22,5 +22,5 @@ void main()
     lightmapCoords = mat2(gl_TextureMatrix[1]) * gl_MultiTexCoord1.st;
     lightmapCoords = (lightmapCoords * 33.05 / 32.) - (1.05 /32.);
 
-    // entity = int(mc_Entity.x + 0.5);
+    entityID = mc_Entity;
 }

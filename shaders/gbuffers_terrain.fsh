@@ -1,12 +1,11 @@
 #version 420
 
-#include "constants.glsl"
-
 // Attributes
 
 in vec2 texCoords;
 in vec3 normal;
 in vec4 color;
+in vec2 entityID;
 
 in vec2 lightmapCoords;
 
@@ -25,6 +24,6 @@ void main()
     gl_FragData[0] = albedo;
     gl_FragData[1] = vec4(normal * .5 + .5, 1.);
     gl_FragData[2] = vec4(lightmapCoords, 0., 1.);
-    gl_FragData[3] = vec4(0., 0., 0., 1.);
+    gl_FragData[3] = vec4(entityID / 10000., 0., 1.);
     gl_FragData[4] = color;
 }
