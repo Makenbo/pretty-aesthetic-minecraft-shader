@@ -19,13 +19,13 @@ void main()
     // Post --------------------------------------------------------
 
     // Tonemap
-    col = tonemap(col);
+    // col = tonemap(col);
     
     // Gamma correction
-    col = ToDisplay(col);
+    // col = ToDisplay(col);
 
     // Apply look LUT
-    col = LookupColor(depthtex2, col);
+    // col = LookupColor(depthtex2, col);
 
     /* RENDERTARGETS:0 */
     gl_FragData[0] = vec4(col, 1.);

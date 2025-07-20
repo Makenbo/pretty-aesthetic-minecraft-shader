@@ -1,16 +1,12 @@
-#version 420
-
-#include "constants.glsl"
+#version 120
 
 // Attributes
 
+in vec4 color;
 in vec2 texCoords;
 in vec3 normal;
-in vec4 color;
-
 in vec2 lightmapCoords;
-
-// Uniforms
+in vec2 water;
 
 uniform sampler2D texture;  // The texture atlas
 
@@ -18,13 +14,12 @@ uniform sampler2D texture;  // The texture atlas
 
 void main()
 {
-    // Sample from texture atlas and account for biome color + ambient occlusion
     vec4 albedo = texture2D(texture, texCoords /*- vec2(1./1024.*16.)*/) * color;
 
     /* RENDERTARGETS:0,1,2,3,4 */
     gl_FragData[0] = albedo;
     gl_FragData[1] = vec4(normal * .5 + .5, 1.);
     gl_FragData[2] = vec4(lightmapCoords, 0., 1.);
-    gl_FragData[3] = vec4(0., 0., 0., 1.);
+    gl_FragData[3] = vec4(water / 10000., 0., 1.);
     gl_FragData[4] = color;
 }

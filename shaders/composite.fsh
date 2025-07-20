@@ -2,29 +2,38 @@
 #include "distort.glsl"
 #include "constants.glsl"
 #include "util/post_col.glsl"
-// #include "/lib/ACES/aces.glsl"
 
 // FS attributes
 varying vec2 texCoord;
 
 // Constants --------------------------------------------------
 
-// Lighting
-const float sunPathRotation = -40.;
+// Day / night cycle
+#define DAY_NIGHT_TRANSITION_TIME 200.
 
-const float sunIntensity = 6.;
-const vec3 sunColor = vec3(.85, 1., .7);
+// Lighting
+const float sunIntensity = 8.;
+const float ambientSunIntensity = 2.;
+const float moonIntensity = .6;
+const float ambientMoonIntensity = 1.;
+const float dimmingAtNoon = .35;
+const vec3 sunCol = vec3(.85, 1., .7);
+const vec3 moonCol = vec3(.2, .35, 1.);
 const vec3 ambient = vec3(0.02, .045, .1) * .75;
-// const vec3 ambient = vec3(0.05, .05, .05) * .75;
+const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
+const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
+const vec3 torchCol = vec3(1.);
+const vec3 coldAmbient = daySkyCol;
+const vec3 warmAmbient = vec3(.9, .8, .7);
 
 // Fog
 #define FOG_DENSITY 3.
+const vec3 sunFogCol = vec3(1., .7, .5);
+const vec3 moonFogCol = vec3(.2, .35, .7);
 
 // Shadows
 #define SHADOW_SAMPLES 2
 #define MAX_SHADOW_BLUR 5.
-#define SHADOW_BIAS_START .0005
-#define SHADOW_BIAS_END .0001
 const int shadowSampleWidth = 2 * SHADOW_SAMPLES + 1;
 const int totalSamples = shadowSampleWidth * shadowSampleWidth;
 
@@ -45,12 +54,14 @@ uniform sampler2D colortex0;    // albedo
 uniform sampler2D colortex1;    // normal
 uniform sampler2D colortex2;    // lightmap
 uniform sampler2D colortex3;    // water
+uniform sampler2D colortex4;    // vertex color (biome color)
 
 /*
-const int colortex0Format = RGBA8;
-const int colortex1Format = RGB16;
+const int colortex0Format = RGBA32F;
+const int colortex1Format = RGB8;
 const int colortex2Format = RGB16;
 const int colortex3Format = RGB16;
+const int colortex4Format = RGBA8;
 */
 
 uniform sampler2D depthtex2;    // LUT
@@ -69,50 +80,22 @@ uniform sampler2D noisetex;
 // const bool generateShadowMipmap = true;
 
 // Constants
-uniform vec3 sunPosition;   // Direction of the sun
-                            // Not normalized and in view space!
+uniform vec3 shadowLightPosition;   // Direction of the sun
+                            // Always length 100 and in view space!
 uniform int frameCounter;
 uniform float viewWidth;
 uniform float viewHeight;
 uniform float far;
 uniform vec3 fogColor;
-uniform vec3 fogDensity;
+uniform int worldTime;
+// uniform vec3 fogDensity;
+uniform ivec2 eyeBrightnessSmooth;
 uniform int blockEntityId;
 
 uniform mat4 gbufferProjectionInverse;
 uniform mat4 gbufferModelViewInverse;
 uniform mat4 shadowModelView;
 uniform mat4 shadowProjection;
-
-/// Lightmap ------------------------------------------------
-
-vec2 AdjustLightmap(in vec2 lightmap)
-{
-    // Torch light
-    lightmap.x *= 5.;
-
-    // Sky light
-    lightmap.y = pow(lightmap.y, 2.);
-    // lightmap.y *= 10.;
-
-    return lightmap;
-}
-
-vec3 LightmapGetCol(in vec2 lightmap)
-{
-    // More contrast
-    lightmap = AdjustLightmap(lightmap);
-
-    // Colors
-    // const vec3 torchCol = vec3(1., .25, .08);
-    // const vec3 torchCol = vec3(.6, .85, 1.);
-    const vec3 torchCol = vec3(1.);
-    const vec3 skyCol = vec3(.09, .18, .25) * 4.;
-    // const vec3 skyCol = vec3(1., 1., 1.) * 5.;
-
-    return  lightmap.x * torchCol +
-            lightmap.y * skyCol;
-}
 
 // Round corners ---------------------------------------------
 
@@ -268,7 +251,7 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
 
     // Get relative shadow bias
     float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
-    shadowBias *= .00025;
+    shadowBias *= .0005;
 
     // Sample and filter shadow
     vec3 result = vec3(0.);
@@ -308,7 +291,7 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float skyDiffuse)
     texelSize *= 8.;
 
     // Get Phong diffuse
-    float phongMask = max(dot(normal, normalize(sunPosition)), 0.);
+    float phongMask = max(dot(normal, shadowLightPosition * .01), 0.);
 
     // Filter shadows
     // vec3 shadowPass = SampleShadow(shadowSampleCoord, normal, .001, 0.);
@@ -319,10 +302,8 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float skyDiffuse)
 
 /// Fog ----------------------------------------------------
 
-vec3 AddFog(vec3 diffuse, vec3 view)
+vec3 AddFog(vec3 diffuse, vec3 view, float dayNightFac, float dayNightTransitionMask)
 {
-    const vec3 sunCol = vec3(1., .7, .5);
-
     float depth = length(view) / far;
 
     // float fogFac = exp(-FOG_DENSITY * (1. - depth)) * depth;
@@ -330,10 +311,12 @@ vec3 AddFog(vec3 diffuse, vec3 view)
     fogFac = tonemap(fogFac * 5.) * 1.1;
     fogFac = min(fogFac, 1.);
 
-    float sunTintFac = max(dot(normalize(sunPosition), normalize(view)), 0.);
+    float sunTintFac = max(dot(shadowLightPosition * .01, normalize(view)), 0.);
     sunTintFac = pow(sunTintFac, 5.);
+    sunTintFac *= 1. - dayNightTransitionMask;
     vec3 fogCol = pow(fogColor, vec3(2.2));
-    fogCol = mix(fogCol, sunCol, sunTintFac);
+    vec3 lightFogCol = mix(moonFogCol, sunFogCol, dayNightFac);
+    fogCol = mix(fogCol, lightFogCol, sunTintFac);
 
     return mix(diffuse, fogCol, vec3(fogFac));
 }
@@ -342,79 +325,130 @@ vec3 AddFog(vec3 diffuse, vec3 view)
 
 void main()
 {
+    vec2 uv = texCoord;
+
+    // Debug view
+    // if (uv.x > .7 && uv.y > .7)
+    //     uv = (uv - .7) * 1./.3;
+
     // Get render passes ----------------------------------------
 
-    vec4 albedoPass = ToLinear( texture2D(colortex0, texCoord) );
+    vec4 albedoPass = ToLinear( texture2D(colortex0, uv) );
     vec3 albedo = albedoPass.rgb;
     float vanillaAO = albedoPass.a;
+    vec4 vertexCol = ToLinear( texture2D(colortex4, uv) );
+    vec3 biomeCol = vertexCol.rgb;
 
-    float depth = texture2D(depthtex0, texCoord).r;
-    float depthNoTrans = texture2D(depthtex1, texCoord).r;
+    float depth = texture2D(depthtex0, uv).r;
+    float depthNoTrans = texture2D(depthtex1, uv).r;
 
     // Get coordinate spaces
-    vec3 clipSpace = vec3(texCoord, depth) * 2. - 1.;
+    vec3 clipSpace = vec3(uv, depth) * 2. - 1.;
     vec4 viewSpaceHom = gbufferProjectionInverse * vec4(clipSpace, 1.);
     vec3 view = viewSpaceHom.xyz / viewSpaceHom.w;
     vec4 world = gbufferModelViewInverse * vec4(view, 1.);
     
-    vec3 clipSpaceNoTrans = vec3(texCoord, depthNoTrans) * 2. - 1.;
+    vec3 clipSpaceNoTrans = vec3(uv, depthNoTrans) * 2. - 1.;
     vec4 viewSpaceHomNoTrans = gbufferProjectionInverse * vec4(clipSpaceNoTrans, 1.);
     vec3 viewNoTrans = viewSpaceHomNoTrans.xyz / viewSpaceHomNoTrans.w;
     vec4 worldNoTrans = gbufferModelViewInverse * vec4(viewNoTrans, 1.);
 
-    float viewDepth = length(view) / far;
-    float viewDepthNoTrans = length(viewNoTrans) / far;
+    float viewDepth = length(view);
+    float viewDepthNoTrans = length(viewNoTrans);
     
-    vec3 normal = texture2D(colortex1, texCoord).rgb;
-    // vec3 normal = BlurRenderPass(colortex1, texCoord, depthtex0, depth);
+    // Maps
+    vec3 normal = texture2D(colortex1, uv).rgb;
+    // vec3 normal = BlurRenderPass(colortex1, uv, depthtex0, depth);
     normal = normalize(normal * 2. - 1.);
 
-    // vanillaAO = BlurAOPass(colortex0, texCoord, depthtex0, depth);
+    // vanillaAO = BlurAOPass(colortex0, uv, depthtex0, depth);
+
+    vec3 entityID = texture2D(colortex3, uv).rgb;
+
+    // Eye brightness
+    float eyeSkyBrightness = float(eyeBrightnessSmooth.y) / 240.;
+    // float shadowsFac = clamp(sin(frameCounter * .01) * 2. + 1., 0., 1.);
+    float shadowsFac = eyeSkyBrightness;
 
     // Lighting -------------------------------------------------
 
-    vec2 lightmap = pow(texture2D(colortex2, texCoord).rg, vec2(2.2));
-    vec3 lightmapCol = LightmapGetCol(lightmap);
+    // Day-night cycle
+    float dayNightFac = 1.;
+    float fade = DAY_NIGHT_TRANSITION_TIME;
+    dayNightFac =  smoothstep(23215. - fade, 23215. + fade, float(worldTime)); // sunrise
+    dayNightFac += smoothstep(12785. + fade, 12785. - fade, float(worldTime)); // sunset
+
+    float noonDimFac = 1.;
+    // float testFac = uv.x * 25000.;
+    // noonDimFac = smoothstep(23215., 30090., float(worldTime));   // Day
+    noonDimFac = smoothstep(-785. + 800., 6090., float(worldTime)) *
+                  smoothstep(12785. - 800., 6090., float(worldTime));
+    noonDimFac += smoothstep(12785. + 800., 18000., float(worldTime)) *  // Night
+                  smoothstep(23215. - 800., 18000., float(worldTime));
+    
+    float lightSourceTransitionMask = 1. - (2. * abs(dayNightFac - .5));
+    shadowsFac *= 1. - lightSourceTransitionMask;
+    shadowsFac = mix(shadowsFac, 0., noonDimFac * .6);
+
+    // Lightmaps
+    vec2 lightmap = pow(texture2D(colortex2, uv).rg, vec2(2.2));
     float skyDiffuse = lightmap.y;
 
+        // Torch light
+        lightmap.x *= 5.;
+
+        // Sky light
+        lightmap.y = pow(lightmap.y, 2.);
+
+        vec3 skyCol = mix(nightSkyCol, daySkyCol, dayNightFac);
+        float ambientIntensity = mix(ambientMoonIntensity, ambientSunIntensity, dayNightFac);
+        vec3 ambientSunAmbientCol = mix(coldAmbient, warmAmbient, lightmap.y);
+        ambientSunAmbientCol = mix(moonCol, ambientSunAmbientCol, dayNightFac);
+        vec3 ambientSunlight = ambientSunAmbientCol * ambientIntensity;
+        vec3 ambientCol = mix(ambientSunlight, skyCol, vec3(shadowsFac));
+
+    vec3 lightmapCol = lightmap.x * torchCol + lightmap.y * ambientCol;
+
+    // Shadows
     vec3 diffuse = ShadowPass(world, normal, skyDiffuse);
 
-    // Combine ---------------------------------------------------
+    // Water ---------------------------------------------------------
 
-    vec3 sunlight = diffuse * sunColor * sunIntensity;
+    float waterMask = int(entityID.x * 10000. + .5) == 20 ? 1. : 0.;
+    float waterDepth = viewDepthNoTrans - viewDepth;
+    waterDepth *= waterMask;
+    float waterFogFac = pow(waterDepth, 1.) * .1;
+    waterFogFac = tonemap(waterFogFac) * 1.1;
+    waterFogFac = min(waterFogFac, 1.);
+    vec3 waterTint = ((biomeCol.rgb * 1. - .5) * .5 + .75);
+
+    // Combine ---------------------------------------------------
+    vec3 lightCol = mix(moonCol * moonIntensity, sunCol * sunIntensity, dayNightFac);
+    lightCol = mix(lightCol, lightCol * dimmingAtNoon, noonDimFac);
+    vec3 sunlight = diffuse * lightCol * shadowsFac;
     vec3 col = albedo * (lightmapCol + sunlight + ambient) * vanillaAO;
 
     // vec3 worldNormals = vec3(gbufferModelViewInverse * vec4(normal, 1.));
     // worldNormals = normalize(worldNormals);
     // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
 
-    col = AddFog(col, view);
+    // Water
+    col = mix(col, col * waterTint, waterMask);
+    col = mix(col, biomeCol.rgb * .2, waterFogFac);
+
+    //Fog
+    col = AddFog(col, view, dayNightFac, lightSourceTransitionMask);
 
     float sky = step(1., depth);
     col = mix(col, albedo, sky); // Seperate the sky
 
     // Debug --------------------------------------------------------
 
-    // vec3 shadowSampleCoord = GetShadowSpaceCoord(world);
-    // col = vec3(GetShadowMask(shadowtex0, shadowSampleCoord) * diffuse);
-    // float distortFac = mix(1., length(shadowSampleCoord.xy), .9);
-    // col.rg = vec2(fract(shadowSampleCoord.xy*shadowMapResolution/distortFac));
-    // col = texture2D(shadowtex0, shadowSampleCoord.xy * distortFac).rrr;
-    // col = max(texture2D(colortex3, texCoord).rgb, vec3(0.));
-    // col = texture2D(shadowtex0, texCoord).rrr;
-    // col = vec3(diffuse);
-    
-    // Post --------------------------------------------------------
-
-    // Tonemap
-    // col = ReinhardtTonemap(col);
-    col = tonemap(col);
-    
-    // Gamma correction
-    col = ToDisplay(col);
-
-    // Apply look LUT
-    col = LookupColor(depthtex2, col);
+    // col = texture2D(colortex3, uv).rgb;
+    // col = texture2D(shadowtex0, uv).rrr;
+    // col = vec3(vanillaAO);
+    // if (texCoord.x > .7 && texCoord.y > .7)
+    //     col = vec3(vanillaAO);
 
     /* RENDERTARGETS:0 */
     gl_FragData[0] = vec4(col, 1.);

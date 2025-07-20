@@ -1,26 +1,22 @@
-#version 420
+#version 120
 
-// in vec3 mc_Entity;
+in vec2 mc_Entity;
 
 out vec2 texCoords;
-out vec3 normal;
 out vec4 color;
-
+out vec3 normal;
 out vec2 lightmapCoords;
-// flat out int entity;
+out vec2 water;
 
 void main()
 {
-    // Transform the vertex
     gl_Position = ftransform();
 
-    // Assign values to varying variables
+    color = gl_Color;
     texCoords = gl_MultiTexCoord0.st;
     normal = gl_NormalMatrix * gl_Normal;
-    color = gl_Color;
-
     lightmapCoords = mat2(gl_TextureMatrix[1]) * gl_MultiTexCoord1.st;
     lightmapCoords = (lightmapCoords * 33.05 / 32.) - (1.05 /32.);
 
-    // entity = int(mc_Entity.x + 0.5);
+    water = mc_Entity;
 }
