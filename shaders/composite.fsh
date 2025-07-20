@@ -21,10 +21,10 @@ const float dimmingAtNoon = .35;
 const vec3 sunCol = vec3(.85, 1., .7);
 const vec3 moonCol = vec3(.2, .35, 1.);
 const vec3 overworldAmbient = vec3(0.02, .045, .1) * .75;
-const vec3 undergroundAmbient = vec3(0.05, .07, .1) * 1.;
+const vec3 undergroundAmbient = vec3(.03, .06, .1) * 1.;
 const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
 const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
-const vec3 torchCol = vec3(1.);
+const vec3 torchCol = vec3(1.) * .7 * 4.;
 // const vec3 torchCol = vec3(1., .5, .1);
 const vec3 coldAmbient = daySkyCol;
 const vec3 warmAmbient = vec3(.9, .8, .7);
@@ -36,6 +36,7 @@ const vec3 warmLightSrcCol = vec3(1., .7, .2);
 #define FOG_DENSITY 3.
 const vec3 sunFogCol = vec3(1.5, .9, 0.) * 4.;
 const vec3 moonFogCol = vec3(.2, .35, .7);
+const float undergroundFogDim = .2;
 
 // Shadows
 #define SHADOW_SAMPLES 2
@@ -394,9 +395,6 @@ void main()
     vec2 lightmap = pow(texture2D(colortex2, uv).rg, vec2(2.2));
     float skyDiffuse = lightmap.y;
 
-        // Torch light
-        lightmap.x *= 5.;
-
         // Sky light
         lightmap.y = pow(lightmap.y, 2.);
 
@@ -445,9 +443,12 @@ void main()
 
     // Fog
     float sunTintFac = max(dot(shadowLightPosition * .01, normalize(view)), 0.);
-    sunTintFac = pow(sunTintFac, 5.);
+    sunTintFac = pow(sunTintFac, 8.) + (pow(sunTintFac, 2.) * .2);
+    // sunTintFac *= .5;
     sunTintFac *= 1. - lightSourceTransitionMask;
+    sunTintFac *= eyeSkyBrightnessFac;
     vec3 fogCol = pow(fogColor, vec3(2.2));
+    fogCol = mix(fogCol * undergroundFogDim, fogCol, vec3(eyeSkyBrightnessFac));
     vec3 lightFogCol = mix(moonFogCol, sunFogCol, dayNightFac);
     vec3 screenAddLight = 1. - (1. - fogCol) * (1. - lightFogCol);
     fogCol = mix(fogCol, screenAddLight, sunTintFac);
@@ -468,15 +469,19 @@ void main()
     float lumMask = dot(col, vec3(.2126, .7152, .0722)); // Convert to black and white
     lumMask *= 4.; // Move gray very rougly closer to the middle gray
     lumMask = ReinhardtTonemap(lumMask); // Compress range, so 8-bit buffer would be enough
+    lumMask = 1. - lumMask; // Make mask show the shadows
+    lumMask = pow(lumMask, 10.);
+    lumMask = max(lumMask, 0.);
 
     // Debug --------------------------------------------------------
 
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
-    // col = vec3(sunMask);
+    // col = vec3(lightCol);
     // col = viewLayer(col, texCoord, vec3(lumMask));
 
-    /* RENDERTARGETS:5,6 */
+    /* RENDERTARGETS:5,6,8 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
-    gl_FragData[1] = vec4(lumMask, 0., 0., 1.); // Linear high precision render
+    gl_FragData[1] = vec4(lumMask, 0., 0., 1.); // Luma mask for local tone mapping
+    gl_FragData[2] = vec4(viewDepth, 0., 0., 1.); // Corrected view depth mask
 }

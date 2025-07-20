@@ -23,7 +23,7 @@ void main()
     vec2 uv = texCoord;
 
     // Debug
-    // uv = modifyUVs(uv);
+    uv = modifyUVs(uv);
 
     // Lookup passes -----------------------------------------------
 
@@ -32,11 +32,11 @@ void main()
 
     // Local tone mapping --------------------------------------------------------
 
-    float shadows = 1. - lumMask;
-    shadows = pow(shadows, 10.);
+    // float shadows = 1. - lumMask;
+    // shadows = pow(shadows, 10.);
     // shadows -= .2;
-    shadows = max(shadows, 0.);
-    col = mix(col, col * 2., shadows);
+    // shadows = max(shadows, 0.);
+    col = mix(col, col * 2., lumMask);
 
     // Post --------------------------------------------------------
 
@@ -51,8 +51,8 @@ void main()
 
     // Debug -------------------------------------------
 
-    // col = viewLayer(col, texCoord, vec3(shadows));
-    // col = vec3(shadows);
+    col = viewLayer(col, texCoord, vec3(lumMask));
+    // col = vec3(lumMask);
 
     /* RENDERTARGETS:0 */
     gl_FragData[0] = vec4(col, 1.);
