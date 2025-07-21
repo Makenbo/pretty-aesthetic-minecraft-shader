@@ -21,7 +21,7 @@ const float dimmingAtNoon = .35;
 const vec3 skyUnderwaterMult = vec3(.3, .7, 1.) * 4.;
 const vec3 sunCol = vec3(.85, 1., .7);
 const vec3 moonCol = vec3(.2, .35, 1.);
-const vec3 overworldAmbient = vec3(0.02, .045, .1) * .75;
+const vec3 overworldAmbient = vec3(0.02, .045, .1) * .5;
 const vec3 undergroundAmbient = vec3(.03, .06, .1) * 1.;
 const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
 const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
@@ -407,7 +407,7 @@ void main()
     float grass = mat == 30 || mat == 31 ? 1. : 0.;
     float phongDiffuse = max(dot(normal, shadowLightPosition * .01), 0.);
     float softDiffuse = .8;
-    float diffuseMask = mix(phongDiffuse, softDiffuse, grass);
+    float diffuseMask = mix(phongDiffuse, softDiffuse, grass); // Grass ignores Phong diffuse
     vec3 diffuse = ShadowPass(world, normal, diffuseMask, skyDiffuse);
 
     // Ambient light
@@ -432,7 +432,7 @@ void main()
 
     // Combine lighting ---------------------------------------------------
 
-    vec3 lightCol = mix(moonCol * moonIntensity, sunCol * sunIntensity, dayNightFac);
+    vec3 lightCol = mix(moonCol * moonIntensity, sunCol * sunIntensity, smoothstep(.5, 1., dayNightFac));
     lightCol = mix(lightCol, lightCol * dimmingAtNoon, noonDimFac);
     vec3 sunlight = diffuse * lightCol * shadowsFac;
     vec3 col = albedo * (lightmapCol + sunlight + ambient) * vanillaAO;
@@ -445,9 +445,9 @@ void main()
 
     // Height based fog
     float worldXZperlin = texture2D(colortex9, fract(worldStatic.xz * .0035)).r;
-    float worldYperlin = texture2D(colortex9, fract(worldStatic.xz * .0035) - frameCounter * .0001).g;
+    float worldYperlin = texture2D(colortex9, fract(worldStatic.xz * .0035) - frameCounter * .00015).g;
     float fogHeightMult = clamp(pow(-world.y * .025, 2.5), 0., .7) * step(world.y, 0);
-    fogHeightMult *= mix(1., worldXZperlin * worldYperlin, .85);
+    fogHeightMult *= mix(1., worldXZperlin * worldYperlin, 1.);
 
     // Brighten near the sun object
     float sunTintFac = max(dot(shadowLightPosition * .01, normalize(view)), 0.);
@@ -464,12 +464,13 @@ void main()
     vec3 lightFogCol = mix(moonFogCol, sunFogCol, smoothstep(.5, .8, dayNightFac));
     vec3 screenAddLight = 1. - (1. - fogCol) * (1. - lightFogCol);
     fogCol = mix(fogCol, screenAddLight, sunTintFac);
+    float fogLuma = dot(fogCol, vec3(.2126, .7152, .0722));
 
     // Get factor
-    float fogDepth = (viewDepth + (viewDepthNoTrans - viewDepth) * .5) / far;
+    float fogDepth = (viewDepth + (viewDepthNoTrans - viewDepth) * .2) / far; // mix in a bit of water
     float densityInv = mix(FOG_DENSITY_INV, NIGHT_VISION_FOG_DENSITY_INV, nightVision);
     float fogFac = pow(fogDepth, densityInv);
-    fogFac = mix(fogFac, fogDepth * 2., fogHeightMult * (1. - nightVision*.9));
+    fogFac = mix(fogFac, fogDepth * 2., fogHeightMult * fogLuma * (1. - nightVision*.9));
     fogFac = ReinhardtTonemap(fogFac * 4.) * 1.25;
     fogFac = min(fogFac, 1.);
     float fogFac2 = fogDepth;
@@ -513,7 +514,7 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(lightCol);
-    col = viewLayer(col, texCoord, vec3(fogHeightMult));
+    col = viewLayer(col, texCoord, vec3(biomeCol));
 
     /* RENDERTARGETS:5,6,8 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
