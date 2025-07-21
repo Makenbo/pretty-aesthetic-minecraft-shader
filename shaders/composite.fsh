@@ -18,6 +18,7 @@ const float ambientSunIntensity = 2.;
 const float moonIntensity = .6;
 const float ambientMoonIntensity = 1.;
 const float dimmingAtNoon = .35;
+const vec3 skyUnderwaterMult = vec3(.3, .7, 1.) * 4.;
 const vec3 sunCol = vec3(.85, 1., .7);
 const vec3 moonCol = vec3(.2, .35, 1.);
 const vec3 overworldAmbient = vec3(0.02, .045, .1) * .75;
@@ -33,7 +34,7 @@ const vec3 warmAmbient = vec3(.9, .8, .7);
 const vec3 warmLightSrcCol = vec3(1., .7, .2);
 
 // Fog
-#define FOG_DENSITY 3.
+#define FOG_DENSITY_INV 4.
 const vec3 sunFogCol = vec3(1.5, .9, 0.) * 4.;
 const vec3 moonFogCol = vec3(.2, .35, .7);
 const float undergroundFogDim = .2;
@@ -49,6 +50,10 @@ const float ambientOcclusionLevel = 1.;
 
 // Round corners
 #define DEPTH_BLUR_MARGIN .001
+
+// Night vision
+#define NIGHT_VISION_AMBIENT_MULT 1.5
+#define NIGHT_VISION_FOG_DENSITY_INV 7.
 
 // Built-in resolutions
 const int shadowMapResolution = 2048;
@@ -95,9 +100,9 @@ uniform float viewHeight;
 uniform float far;
 uniform vec3 fogColor;
 uniform int worldTime;
-// uniform vec3 fogDensity;
 uniform ivec2 eyeBrightnessSmooth;
-uniform int blockEntityId;
+uniform int isEyeInWater;
+uniform float nightVision;
 
 uniform mat4 gbufferProjectionInverse;
 uniform mat4 gbufferModelViewInverse;
@@ -304,20 +309,6 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float phongMask, float skyDiffuse)
     return shadowPass;
 }
 
-/// Fog ----------------------------------------------------
-
-vec3 AddFog(vec3 diffuse, vec3 view, vec3 fogCol)
-{
-    float depth = length(view) / far;
-
-    // float fogFac = exp(-FOG_DENSITY * (1. - depth)) * depth;
-    float fogFac = pow(depth, FOG_DENSITY);
-    fogFac = tonemap(fogFac * 5.) * 1.1;
-    fogFac = min(fogFac, 1.);
-
-    return mix(diffuse, fogCol, vec3(fogFac));
-}
-
 /// Main ----------------------------------------------
 
 void main()
@@ -325,7 +316,7 @@ void main()
     vec2 uv = texCoord;
 
     // Debug view
-    // uv = modifyUVs(uv);
+    uv = modifyUVs(uv);
 
     // Get render passes ----------------------------------------
 
@@ -386,6 +377,7 @@ void main()
     float lightSourceTransitionMask = 1. - (2. * abs(dayNightFac - .5));
     shadowsFac *= 1. - lightSourceTransitionMask;
     shadowsFac = mix(shadowsFac, 0., noonDimFac * .6);
+    shadowsFac = max(shadowsFac - (float(isEyeInWater) * 1.), 0.);
 
     // Fake light color
     // float warmLightSrc = mat == 25 || mat == 26 ? 1. : 0.;
@@ -396,7 +388,7 @@ void main()
     float skyDiffuse = lightmap.y;
 
         // Sky light
-        lightmap.y = pow(lightmap.y, 2.);
+        lightmap.y = isEyeInWater == 0 ? pow(lightmap.y, 2.) : lightmap.y;
 
         vec3 skyCol = mix(nightSkyCol, daySkyCol, dayNightFac);
         float ambientIntensity = mix(ambientMoonIntensity, ambientSunIntensity, dayNightFac);
@@ -404,6 +396,7 @@ void main()
         ambientSunAmbientCol = mix(moonCol, ambientSunAmbientCol, dayNightFac);
         vec3 ambientSunlight = ambientSunAmbientCol * ambientIntensity;
         vec3 ambientCol = mix(ambientSunlight, skyCol, vec3(shadowsFac));
+        ambientCol = mix(ambientCol, ambientCol * skyUnderwaterMult, isEyeInWater);
 
     vec3 lightmapCol = lightmap.x * torchCol + lightmap.y * ambientCol;
 
@@ -416,18 +409,27 @@ void main()
 
     // Ambient light
     vec3 ambient = mix(undergroundAmbient, overworldAmbient, eyeSkyBrightnessFac);
+    ambient = mix(ambient, ambient * NIGHT_VISION_AMBIENT_MULT, nightVision);
 
     // Water ---------------------------------------------------------
 
     float waterMask = mat == 20 ? 1. : 0.;
-    float waterDepth = viewDepthNoTrans - viewDepth;
-    waterDepth *= waterMask;
+    waterMask = min(abs(waterMask - isEyeInWater), 1.);
+    waterMask *= 1. - step(1., depth); // Get rid of some artifacts in the sky
+    float waterDepth = isEyeInWater == 0 ?
+                       abs(viewDepthNoTrans - viewDepth) * waterMask :
+                       viewDepth;
     float waterFogFac = pow(waterDepth, 1.) * .1;
     waterFogFac = tonemap(waterFogFac) * 1.1;
     waterFogFac = min(waterFogFac, 1.);
-    vec3 waterTint = ((biomeCol.rgb * 1. - .5) * .5 + .75);
+    waterFogFac = mix(waterFogFac, waterFogFac * .5, nightVision);
+    vec3 waterCol = isEyeInWater == 1 ? fogColor : biomeCol.rgb;
+    waterCol = mix(waterCol, waterCol * .3, waterFogFac);
+    vec3 waterTint = ((waterCol * 1. - .5) * .5 + .75);
 
     // Combine ---------------------------------------------------
+
+    // Lighting
     vec3 lightCol = mix(moonCol * moonIntensity, sunCol * sunIntensity, dayNightFac);
     lightCol = mix(lightCol, lightCol * dimmingAtNoon, noonDimFac);
     vec3 sunlight = diffuse * lightCol * shadowsFac;
@@ -437,9 +439,7 @@ void main()
     // worldNormals = normalize(worldNormals);
     // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
 
-    // Water
-    col = mix(col, col * waterTint, waterMask);
-    col = mix(col, biomeCol.rgb * .2, waterFogFac);
+    // Water fog
 
     // Fog
     float sunTintFac = max(dot(shadowLightPosition * .01, normalize(view)), 0.);
@@ -447,15 +447,30 @@ void main()
     // sunTintFac *= .5;
     sunTintFac *= 1. - lightSourceTransitionMask;
     sunTintFac *= eyeSkyBrightnessFac;
+    sunTintFac = mix(sunTintFac, sunTintFac * 1., waterMask);
     vec3 fogCol = pow(fogColor, vec3(2.2));
-    fogCol = mix(fogCol * undergroundFogDim, fogCol, vec3(eyeSkyBrightnessFac));
+    fogCol = mix(fogCol * undergroundFogDim, fogCol, vec3(eyeSkyBrightnessFac) * (1. - isEyeInWater));
+    fogCol = isEyeInWater == 0 ? fogCol : waterCol * .2;
     vec3 lightFogCol = mix(moonFogCol, sunFogCol, dayNightFac);
     vec3 screenAddLight = 1. - (1. - fogCol) * (1. - lightFogCol);
     fogCol = mix(fogCol, screenAddLight, sunTintFac);
-    col = AddFog(col, view, fogCol);
+    float fogDepth = (viewDepth + (viewDepthNoTrans - viewDepth) * .5) / far;
+    float densityInv = mix(FOG_DENSITY_INV, NIGHT_VISION_FOG_DENSITY_INV, nightVision);
+    float fogFac = pow(fogDepth, densityInv);
+    fogFac = ReinhardtTonemap(fogFac * 4.) * 1.25;
+    fogFac = min(fogFac, 1.);
+
+    // Water
+    col = mix(col, col * waterTint, waterMask);
+    // col = mix(col, screenAddLight, sunTintFac * waterMask * fogFac); // Add sun tint
+    col = mix(col, waterCol * .2, waterFogFac);
+    // col = mix(col, screenAddLight, sunTintFac * waterMask);
+
+    // Actually add fog
+    col = mix(col, fogCol, vec3(fogFac) * (1. - isEyeInWater));
 
     // Sky
-    float skyMask = step(1., depth);
+    float skyMask = isEyeInWater == 0 ? step(1., depth) : 0.;
     float albedoLum = dot(albedo, vec3(.2126, .7152, .0722)) * skyMask;
     float sunMask = 1. - (3.5 * (-albedoLum + .95)); // Gradualy select very bright pixels
     sunMask = clamp(sunMask, 0., 1.);
@@ -478,7 +493,7 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(lightCol);
-    // col = viewLayer(col, texCoord, vec3(lumMask));
+    col = viewLayer(col, texCoord, vec3(fogDepth));
 
     /* RENDERTARGETS:5,6,8 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
