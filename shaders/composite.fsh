@@ -318,7 +318,7 @@ void main()
     vec2 uv = texCoord;
 
     // Debug view
-    uv = modifyUVs(uv);
+    // uv = modifyUVs(uv);
 
     // Get render passes ----------------------------------------
 
@@ -383,8 +383,8 @@ void main()
     shadowsFac = max(shadowsFac - (float(isEyeInWater) * 1.), 0.);
 
     // Fake light color
-    // float warmLightSrc = mat == 25 || mat == 26 ? 1. : 0.;
-    // vec3 lightmapBlockCol = warmLightSrc * warmLightSrcCol;
+    float warmLightSrc = mat == 25 || mat == 26 ? 1. : 0.;
+    vec3 lightmapBlockCol = warmLightSrc * warmLightSrcCol;
 
     // Lightmaps
     vec2 lightmap = pow(texture2D(colortex2, uv).rg, vec2(2.2));
@@ -404,7 +404,7 @@ void main()
     vec3 lightmapCol = lightmap.x * torchCol + lightmap.y * ambientCol;
 
     // Shadows
-    float grass = mat == 30 || mat == 31 ? 1. : 0.;
+    float grass = mat == 30 || mat == 31 || mat == 32 ? 1. : 0.;
     float phongDiffuse = max(dot(normal, shadowLightPosition * .01), 0.);
     float softDiffuse = .8;
     float diffuseMask = mix(phongDiffuse, softDiffuse, grass); // Grass ignores Phong diffuse
@@ -514,10 +514,11 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(lightCol);
-    col = viewLayer(col, texCoord, vec3(biomeCol));
+    // col = viewLayer(col, texCoord, vec3(lightmapBlockCol));
 
-    /* RENDERTARGETS:5,6,8 */
+    /* RENDERTARGETS:5,6,8,9 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
     gl_FragData[1] = vec4(lumMask, 0., 0., 1.); // Luma mask for local tone mapping
     gl_FragData[2] = vec4(viewDepth, 0., 0., 1.); // Corrected view depth mask
+    gl_FragData[3] = vec4(lightmapBlockCol, 1.); // Blocklight objects
 }

@@ -50,12 +50,12 @@ void main()
     grassHeightMask = clamp(grassHeightMask, 0., 1.);
     
     float grass = mat == 30 ? 1. : 0.;
-    float leaves = mat == 31 ? 1. : 0.;
+    float leaves = mat == 31 || mat == 32 ? 1. : 0.;
 
     pos += off * leaves;
     pos += off * grass * grassHeightMask;
+    
     // color = vec4(vec3(grassHeightMask), 1.);
-    // - vec2(1./1024.*16.)
 
     /// Pass attributes post ----------------------------------
 

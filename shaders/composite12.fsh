@@ -4,9 +4,12 @@
 
 #version 420
 
-#include "util/constants.glsl"
+// #include "util/constants.glsl"
+#include "util/functions.glsl"
 
-#define DEPTH_MARGIN 1.
+#define DOWNRES_FAC .25
+const ivec2 BLUR_DIR = ivec2(1, 0);
+
 
 /// Attributes -------------------------------------------------------
 
@@ -15,6 +18,7 @@ in vec2 texCoord;
 /// Custom textures -----------------------------------------------
 
 uniform sampler2D colortex7;    // Low res luma mask to blur
+uniform sampler2D colortex10;    // Low res bloclight mask to blur
 uniform sampler2D colortex8;    // full res corrected depth
 
 /// Uniforms -----------------------------------------------------
@@ -23,29 +27,11 @@ uniform float viewWidth;
 
 void main()
 {
-    float depthCenter = texture2D(colortex8, texCoord).r;
-    float lum = texture2D(colortex7, texCoord).r * gauss9[0];
-    float weightSum = gauss9[0];
-    float texSize = (1. / viewWidth) * 4.;
+    float texSize = (1. / viewWidth) * (1. / DOWNRES_FAC);
+    float lum = GaussDepthBlur1f(colortex7, colortex8, texCoord, texSize, BLUR_DIR);
+    vec3 blockCol = GaussBlur3f(colortex10, texCoord, texSize, BLUR_DIR);
 
-    for (int i = 1; i < 9; i++)
-    {
-        float myDepth = texture2D(colortex8, texCoord + vec2(texSize, 0.) * i).r;
-        float depthDiff = depthCenter - myDepth;
-        float closeEnough = depthDiff < DEPTH_MARGIN ? 1. : 0.;
-        lum += texture2D(colortex7, texCoord + vec2(texSize, 0.) * i).r * gauss9[i] * closeEnough;
-        weightSum += gauss9[i] * closeEnough;
-
-        myDepth = texture2D(colortex8, texCoord - vec2(texSize, 0.) * i).r;
-        depthDiff = depthCenter - myDepth;
-        closeEnough = depthDiff < DEPTH_MARGIN ? 1. : 0.;
-        lum += texture2D(colortex7, texCoord - vec2(texSize, 0.) * i).r * gauss9[i] * closeEnough;
-        weightSum += gauss9[i] * closeEnough;
-    }
-
-    lum /= weightSum;
-    // lum = texCoord.y;
-
-    /* RENDERTARGETS:7 */
+    /* RENDERTARGETS:7,10 */
     gl_FragData[0] = vec4(lum, 0., 0., 1.);
+    gl_FragData[1] = vec4(blockCol, 1.);
 }

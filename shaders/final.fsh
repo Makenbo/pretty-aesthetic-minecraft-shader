@@ -16,6 +16,7 @@ in vec2 texCoord;
 
 uniform sampler2D colortex5;    // Linear render
 uniform sampler2D colortex7;    // Blurred luma
+uniform sampler2D colortex10;    // Blurred blocklight
 
 /*
 const int colortex5Format = RGB16F;
@@ -32,12 +33,13 @@ void main()
     vec2 uv = texCoord;
 
     // Debug
-    // uv = modifyUVs(uv);
+    uv = modifyUVs(uv);
 
     // Lookup passes -----------------------------------------------
 
     vec3 col = texture2D(colortex5, uv).rgb;
     float lumMask = texture2D(colortex7, uv).r;
+    vec3 blocklight = texture2D(colortex10, uv).rgb;
 
     // Local tone mapping --------------------------------------------------------
 
@@ -61,7 +63,7 @@ void main()
 
     // Debug -------------------------------------------
 
-    // col = viewLayer(col, texCoord, vec3(lumMask));
+    col = viewLayer(col, texCoord, vec3(lumMask));
     // col = vec3(lumMask);
 
     /* RENDERTARGETS:0 */

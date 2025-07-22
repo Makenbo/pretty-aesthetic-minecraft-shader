@@ -14,9 +14,11 @@ in vec2 texCoord;
 
 // uniform sampler2D depthtex0;
 uniform sampler2D colortex6; // Luma mask to downscale
+uniform sampler2D colortex9; // Blocklight color to downscale
 
 /*
 const int colortex6Format = R8;
+const int colortex9Format = RGB8;
 */
 
 uniform mat4 gbufferProjectionInverse;
@@ -25,13 +27,9 @@ uniform mat4 gbufferProjectionInverse;
 void main()
 {
     float lumMask = texture2D(colortex6, texCoord).r;
+    vec3 blocklightMask = texture2D(colortex9, texCoord).rgb;
 
-    // float depth = texture2D(depthtex0, texCoord).r;
-    // vec3 clipSpace = vec3(texCoord, depth) * 2. - 1.;
-    // vec4 viewSpaceHom = gbufferProjectionInverse * vec4(clipSpace, 1.);
-    // vec3 view = viewSpaceHom.xyz / viewSpaceHom.w;
-    // depth = length(view);
-
-    /* RENDERTARGETS:7 */
+    /* RENDERTARGETS:7,10 */
     gl_FragData[0] = vec4(lumMask, 0., 0., 1.);
+    gl_FragData[1] = vec4(blocklightMask, 1.);
 }
