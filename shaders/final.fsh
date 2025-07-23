@@ -28,12 +28,16 @@ uniform sampler2D depthtex2;    // LUT
 
 uniform float nightVision;
 
+/// Shader settings -------------------------------------------
+
+#define LUT // Apply a color grading filter. Basically zero perfomance impact.
+
 void main()
 {
     vec2 uv = texCoord;
 
     // Debug
-    uv = modifyUVs(uv);
+    // uv = modifyUVs(uv);
 
     // Lookup passes -----------------------------------------------
 
@@ -59,11 +63,13 @@ void main()
     col = ToDisplay(col);
 
     // Apply look LUT
-    col = LookupColor(depthtex2, col);
+    #ifdef LUT
+        col = LookupColor(depthtex2, col);
+    #endif
 
     // Debug -------------------------------------------
 
-    col = viewLayer(col, texCoord, vec3(lumMask));
+    // col = viewLayer(col, texCoord, vec3(lumMask));
     // col = vec3(lumMask);
 
     /* RENDERTARGETS:0 */
