@@ -1,4 +1,4 @@
-#version 120
+#version 420
 
 in vec2 mc_Entity;
 
