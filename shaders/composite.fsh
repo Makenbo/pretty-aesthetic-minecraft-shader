@@ -65,6 +65,7 @@ uniform sampler2D colortex2;    // lightmap
 uniform sampler2D colortex3;    // blocks ids
 uniform sampler2D colortex4;    // vertex color (biome color)
 uniform sampler2D colortex11;   // water layer
+uniform sampler2D colortex12;   // sky layer
 
 /*
 const int colortex0Format = RGBA8;
@@ -73,6 +74,7 @@ const int colortex2Format = RG16;
 const int colortex3Format = R16;
 const int colortex4Format = RGBA8;
 const int colortex11Format = RGBA8;
+const int colortex12Format = RGBA16;
 */
 
 uniform sampler2D depthtex2;    // LUT
@@ -359,6 +361,7 @@ void main()
     float depthNoTrans = texture2D(depthtex1, uv).r;
 
     vec4 waterPass = texture2D(colortex11, uv);
+    vec4 skyPass = texture2D(colortex12, uv);
 
     // Get coordinate spaces
     vec3 clipSpace = vec3(uv, depth) * 2. - 1.;
@@ -394,6 +397,7 @@ void main()
     normal = normalize(normal * 2. - 1.);
 
     vanillaAO = mix(vanillaAO, 1., grass);
+    vanillaAO = mix(vanillaAO, 1., waterPass.a * .5);
 
     // Eye brightness
     float eyeSkyBrightnessFac = float(eyeBrightnessSmooth.y) / 240.;
@@ -469,14 +473,14 @@ void main()
 
     vec3 waterTint = isEyeInWater == 1 ? fogColor : biomeCol.rgb;
     // vec3 waterTint = ((waterFogCol * 1. - .5) * .5 + .75);
-    vec3 waterFogCol = mix(waterTint, waterTint * .0, waterFogFac); // "Light absorbtion"
+    vec3 waterFogCol = mix(waterTint, waterTint * .2, waterFogFac); // "Light absorption"
 
     vec3 waterCol = albedo;
     // waterCol = mix(waterCol, waterCol * lightmap.y, 1.) * 1.5;
     waterCol *= waterTint;
     // waterCol *= lightmap.x + lightmap.y + .5;
     // waterCol = mix(waterCol, waterCol * (waterPass.rgb * 3.), 1.);
-    // waterCol = mix(waterCol, waterFogCol * .2, waterFogFac); // "Light absorbtion"
+    // waterCol = mix(waterCol, waterFogCol * .2, waterFogFac); // "Light absorption"
 
     // Combine lighting ---------------------------------------------------
 
@@ -492,13 +496,12 @@ void main()
     // Fog -------------------------------------------------------
 
     // Water
-    col = mix(col, col * waterTint * 1., waterMask); // Water blue-ish tint
+    col = mix(col, col * waterTint * 2., waterMask); // Water blue-ish tint
     // col = mix(col, screenAddLight, sunTintFac * waterMask * fogFac); // Add sun tint
-    col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorbtion"
-    vec3 waterSurfaceCol = mix(waterPass.rgb, waterPass.rgb * (lightmapCol + sunlight + ambient), shadowsFac*.5);
-    // waterSurfaceCol = (waterSurfaceCol - .1) * 2.;
+    col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
+    vec3 waterSurfaceCol = waterPass.rgb;
     waterSurfaceCol = max(waterSurfaceCol, 0.);
-    col = mix(col, col + waterSurfaceCol * .2, waterMask * .7); // Draw water surface
+    col = mix(col, col * waterSurfaceCol * 2.5 + waterPass.rgb * (lightmapCol + sunlight + ambient) * .05, waterMask); // Draw water surface
 
     // Height based fog
     float worldXZperlin = texture2D(colortex9, fract(worldStatic.xz * .003)).r;
@@ -512,12 +515,12 @@ void main()
     // sunTintFac *= .5;
     sunTintFac *= 1. - lightSourceTransitionMask;
     sunTintFac *= eyeSkyBrightnessFac;
-    sunTintFac = mix(sunTintFac, sunTintFac * 1., waterMask);
 
     // Get color
-    vec3 fogCol = pow(fogColor, vec3(2.2));
-    fogCol = mix(fogCol * undergroundFogDim, fogCol, vec3(eyeSkyBrightnessFac) * (1. - isEyeInWater));
-    fogCol = isEyeInWater == 0 ? fogCol : waterFogCol * .2;
+    // vec3 fogCol = pow(fogColor, vec3(2.2));
+    vec3 fogCol = skyPass.rgb;
+    // fogCol = mix(fogCol * undergroundFogDim, fogCol, vec3(eyeSkyBrightnessFac) * (1. - isEyeInWater));
+    // fogCol = isEyeInWater == 0 ? fogCol : waterFogCol * .2;
     vec3 lightFogCol = mix(moonFogCol, sunFogCol, smoothstep(.5, .8, dayNightFac));
     vec3 screenAddLight = 1. - (1. - fogCol) * (1. - lightFogCol);
     fogCol = mix(fogCol, screenAddLight, sunTintFac);
@@ -544,10 +547,10 @@ void main()
     float albedoLum = dot(albedo, vec3(.2126, .7152, .0722)) * skyMask;
     float sunMask = 1. - (3.5 * (-albedoLum + .95)); // Gradualy select very bright pixels
     sunMask = clamp(sunMask, 0., 1.);
-    screenAddLight = 1. - (1. - albedo) * (1. - lightFogCol);
-    vec3 skyAlbedo = mix(albedo, screenAddLight, sunTintFac);
+    screenAddLight = 1. - (1. - skyPass.rgb) * (1. - lightFogCol);
+    vec3 skyAlbedo = mix(skyPass.rgb, screenAddLight, sunTintFac);
     col = mix(col, skyAlbedo, skyMask); // Seperate the sky
-    col = mix(col, col * 10., sunMask);
+    col = mix(col, col + albedo * 2., skyMask);
 
     // Prepare luma mask for local tone mapping ----------------------------------
 
@@ -563,7 +566,7 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(fwidth(viewDepth));
-    col = viewLayer(col, texCoord, vec3(biomeCol.rgb * sunlight));
+    col = viewLayer(col, texCoord, vec3(skyPass));
 
     /* RENDERTARGETS:5,6,8,9 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
