@@ -31,6 +31,7 @@ uniform float nightVision;
 /// Shader settings -------------------------------------------
 
 #define LUT // Apply a color grading filter. Basically zero perfomance impact.
+#define LOCAL_TONE_MAPPING // Makes shadows brighter, but in a pretty way. Small performance impact. Rarely might cause light leaking artifacts.
 
 void main()
 {
@@ -47,19 +48,17 @@ void main()
 
     // Local tone mapping --------------------------------------------------------
 
-    // float shadows = 1. - lumMask;
-    // shadows = pow(shadows, 10.);
-    // shadows -= .2;
-    // shadows = max(shadows, 0.);
-    float shadowMult = mix(LOCAL_SHADOW_MULT, LOCAL_SHADOW_MULT_NIGHT_VISION, nightVision);
-    col = mix(col, col * shadowMult, lumMask);
+    #ifdef LOCAL_TONE_MAPPING
+        float shadowMult = mix(LOCAL_SHADOW_MULT, LOCAL_SHADOW_MULT_NIGHT_VISION, nightVision);
+        col = mix(col, col * shadowMult, lumMask);
+    #endif
 
     // Post --------------------------------------------------------
 
-    // Tonemap
+    // Tonemap (linear to linear)
     col = tonemap(col);
     
-    // Gamma correction
+    // Gamma correction (linear to gamma 2.2)
     col = ToDisplay(col);
 
     // Apply look LUT

@@ -1,5 +1,15 @@
 #include "/util/constants.glsl"
 
+// Usefull tidbits -----------------------------------------------------------------
+
+// Linearizes the depth value taken from the depth buffer (which is in NDC)
+float linearizeDepth(float depth, float near, float far)
+{
+    return (near * far) / (depth * (near - far) + far);
+}
+
+// Blurs -----------------------------------------------------------------------------------------
+
 #define DEPTH_MARGIN 1.
 
 float GaussDepthBlur1f(sampler2D lumTex, sampler2D depthTex, vec2 uv, float texSize, ivec2 blurDir)

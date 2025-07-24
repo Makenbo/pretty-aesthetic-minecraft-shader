@@ -1,6 +1,6 @@
 #version 420
 #include "distort.glsl"
-#include "util/constants.glsl"
+#include "util/functions.glsl"
 #include "util/post_col.glsl"
 #include "debug/debug_view.glsl"
 
@@ -13,11 +13,11 @@ varying vec2 texCoord;
 #define DAY_NIGHT_TRANSITION_TIME 500.
 
 // Lighting
-const float sunIntensity = 8.;
+const float sunIntensity = 7.;
 const float ambientSunIntensity = 2.;
 const float moonIntensity = .6;
 const float ambientMoonIntensity = 1.;
-const float dimmingAtNoon = .35;
+const float dimmingAtNoon = .6;
 const vec3 skyUnderwaterMult = vec3(.3, .7, 1.) * 4.;
 const vec3 sunCol = vec3(.85, 1., .7);
 const vec3 moonCol = vec3(.2, .35, 1.);
@@ -47,9 +47,6 @@ const int totalSamples = shadowSampleWidth * shadowSampleWidth;
 
 // Ambient occlusion
 const float ambientOcclusionLevel = 1.;
-
-// Round corners
-#define DEPTH_BLUR_MARGIN .001
 
 // Night vision
 #define NIGHT_VISION_AMBIENT_MULT 1.5
@@ -98,6 +95,7 @@ uniform vec3 shadowLightPosition;   // Direction of the highest celestial body
 uniform int frameCounter;
 uniform float viewWidth;
 uniform float viewHeight;
+uniform float near;
 uniform float far;
 uniform vec3 fogColor;
 uniform vec3 cameraPosition;
@@ -115,34 +113,37 @@ uniform mat4 shadowProjection;
 #define VARIABLE_PENUMBRA // Shadows are softer the further they are
 #define SHADOW_FILTER_SAMPLES 16 // [4 16] Determines noisiness of blurred shadows
 
-//#define ROUND_BLOCKS // Funky round block filter, but pretty slow
+//#define ROUND_BLOCKS // Funky round block filter. Moderate performance impact.
 
 // Round corners ---------------------------------------------
 
+#define DEPTH_BLUR_MARGIN 1.
 #define DEPTH_BLUR_SCALE 5.
 
-vec3 BlurRenderPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth)
+vec3 BlurRenderPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth, float depthMult)
 {    
     float angle = texture2D(noisetex, uv * 20.).r * 6.28 * frameCounter;
     float cosAngle = cos(angle);
     float sinAngle = sin(angle);
     mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle);
 
-    vec3 outCol = vec3(0.);
-    int weight = 0;
+    vec3 outCol = texture2D(tex, uv).xyz;
+    int weight = 1;
 
     for (int i = 0; i < 16; i++)
     {
         // Get randomized poisson offset
-        vec2 off = rndRot * poissonDisk4x4[i] * DEPTH_BLUR_SCALE
-                   * (1. - pow(origDepth, 150.));
+        // vec2 off = rndRot * poissonDisk4x4[i] * DEPTH_BLUR_SCALE * (1. - pow(origDepth, 150.));
+        vec2 off = rndRot * poissonDisk4x4[i] * DEPTH_BLUR_SCALE;
+        off /= depthMult;
         off /= vec2(viewWidth, viewHeight);
 
         // Get depth
         float myDepth = texture2D(depthtex0, uv + off).r;
+        myDepth = linearizeDepth(myDepth, near, far);
 
         // Add up
-        if (abs(myDepth - origDepth) < DEPTH_BLUR_MARGIN)
+        // if (abs(myDepth - origDepth) < DEPTH_BLUR_MARGIN)
         {
             outCol += texture2D(tex, uv + off).xyz;
             weight++;
@@ -159,8 +160,8 @@ float BlurAOPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth)
     float sinAngle = sin(angle);
     mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle);
 
-    float outCol = 0.;
-    int weight = 0;
+    float outCol = texture2D(tex, uv).a;
+    int weight = 1;
 
     for (int i = 0; i < 16; i++)
     {
@@ -171,6 +172,7 @@ float BlurAOPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth)
 
         // Get depth
         float myDepth = texture2D(depthtex0, uv + off).r;
+        myDepth = linearizeDepth(myDepth, near, far);
 
         // Add up
         if (abs(myDepth - origDepth) < DEPTH_BLUR_MARGIN)
@@ -379,8 +381,10 @@ void main()
     #ifndef ROUND_BLOCKS
         vec3 normal = texture2D(colortex1, uv).rgb;
     #else
-        vec3 normal = BlurRenderPass(colortex1, uv, depthtex0, depth);
-        vanillaAO = BlurAOPass(colortex0, uv, depthtex0, depth);
+        float linearDepth = linearizeDepth(depth, near, far);
+        float screenArea = length(vec2(dFdx(linearDepth), dFdy(linearDepth)));
+        vec3 normal = BlurRenderPass(colortex1, uv, depthtex0, linearDepth, screenArea);
+        // vanillaAO = BlurAOPass(colortex0, uv, depthtex0, linearDepth);
     #endif
 
     normal = normalize(normal * 2. - 1.);
@@ -497,25 +501,25 @@ void main()
     float fogLuma = dot(fogCol, vec3(.2126, .7152, .0722));
 
     // Get factor
-    float fogDepth = (viewDepth + (viewDepthNoTrans - viewDepth) * .2) / far; // mix in a bit of water
+    float fogDepth = viewDepth / far;
+    float underwaterFogDepth = (viewDepthNoTrans - viewDepth) / far; // To get smoother fog transition on water surface
     float densityInv = mix(FOG_DENSITY_INV, NIGHT_VISION_FOG_DENSITY_INV, nightVision);
-    float fogFac = pow(fogDepth, densityInv);
+    float fogFac = pow(fogDepth + underwaterFogDepth*.2, densityInv);
     fogFac = mix(fogFac, fogDepth * 2., fogHeightMult * fogLuma * (1. - nightVision*.9));
     fogFac = ReinhardtTonemap(fogFac * 4.) * 1.25;
     fogFac = min(fogFac, 1.);
-    float fogFac2 = fogDepth;
 
     // Water
-    col = mix(col, col * waterTint, waterMask);
+    col = mix(col, col * waterTint, waterMask); // Water blue-ish tint
     // col = mix(col, screenAddLight, sunTintFac * waterMask * fogFac); // Add sun tint
-    col = mix(col, waterCol * .2, waterFogFac);
+    col = mix(col, waterCol * .2, waterFogFac); // "Light absorbtion"
     // col = mix(col, screenAddLight, sunTintFac * waterMask);
 
     // Actually add fog
     // Darken when bright fog
-    // col = mix(col, col * .2, vec3(fogFac) * (1. - isEyeInWater) * length(fogColor));
+    col = mix(col, col * .2, vec3(fogFac) * (1. - isEyeInWater) * length(fogColor));
     // Overworld fog
-    // col = mix(col, fogCol, vec3(fogFac) * (1. - isEyeInWater));
+    col = mix(col, fogCol, vec3(fogFac) * (1. - isEyeInWater));
 
     // Sky ----------------------------------------------------------
 
@@ -526,7 +530,7 @@ void main()
     screenAddLight = 1. - (1. - albedo) * (1. - lightFogCol);
     vec3 skyAlbedo = mix(albedo, screenAddLight, sunTintFac);
     col = mix(col, skyAlbedo, skyMask); // Seperate the sky
-    col = mix(col, col * 5., sunMask);
+    col = mix(col, col * 10., sunMask);
 
     // Prepare luma mask for local tone mapping ----------------------------------
 
@@ -541,8 +545,8 @@ void main()
 
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
-    // col = vec3(vanillaAO);
-    col = viewLayer(col, texCoord, vec3(albedo));
+    // col = vec3(fwidth(viewDepth));
+    col = viewLayer(col, texCoord, vec3(screenArea));
 
     /* RENDERTARGETS:5,6,8,9 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
