@@ -1,7 +1,5 @@
 #version 420
 
-in vec2 mc_Entity;
-
 out vec2 texCoords;
 out vec4 color;
 

@@ -1,5 +1,6 @@
 #version 420
 
+#include "shader_settings.glsl"
 #include "util/post_col.glsl"
 #include "debug/debug_view.glsl"
 
@@ -27,11 +28,6 @@ uniform sampler2D depthtex2;    // LUT
 /// State uniforms -----------------------------------------------
 
 uniform float nightVision;
-
-/// Shader settings -------------------------------------------
-
-#define LUT // Apply a color grading filter. Basically zero perfomance impact.
-#define LOCAL_TONE_MAPPING // Makes shadows brighter, but in a pretty way. Small performance impact. Rarely might cause light leaking artifacts.
 
 void main()
 {

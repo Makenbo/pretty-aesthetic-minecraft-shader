@@ -1,5 +1,6 @@
 #version 420
 #include "distort.glsl"
+#include "shader_settings.glsl"
 #include "util/functions.glsl"
 #include "util/post_col.glsl"
 #include "debug/debug_view.glsl"
@@ -25,8 +26,8 @@ const vec3 overworldAmbient = vec3(0.02, .045, .1) * .5;
 const vec3 undergroundAmbient = vec3(.03, .06, .1) * 1.;
 const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
 const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
-const vec3 torchCol = vec3(1.) * .7 * 4.;
-// const vec3 torchCol = vec3(1., .5, .1);
+// const vec3 torchCol = vec3(1.) * .7 * 4.;
+const vec3 torchCol = vec3(1., .6, .2) * 4.;
 const vec3 coldAmbient = daySkyCol;
 const vec3 warmAmbient = vec3(.9, .8, .7);
 
@@ -35,8 +36,8 @@ const vec3 warmLightSrcCol = vec3(1., .7, .2);
 
 // Fog
 #define FOG_DENSITY_INV 4.
-const vec3 sunFogCol = vec3(1.5, .9, 0.) * 4.;
-const vec3 moonFogCol = vec3(.2, .35, .7);
+const vec3 sunFogCol = vec3(1.5, .9, 0.) * 2.;
+const vec3 moonFogCol = vec3(.2, .35, .7) * .5;
 const float undergroundFogDim = .2;
 
 // Shadows
@@ -112,12 +113,6 @@ uniform mat4 gbufferProjectionInverse;
 uniform mat4 gbufferModelViewInverse;
 uniform mat4 shadowModelView;
 uniform mat4 shadowProjection;
-
-// Shader options
-#define VARIABLE_PENUMBRA // Shadows are softer the further they are
-#define SHADOW_FILTER_SAMPLES 16 // [4 16] Determines noisiness of blurred shadows
-
-//#define ROUND_BLOCKS // Funky round block filter. Moderate performance impact.
 
 // Round corners ---------------------------------------------
 
@@ -362,6 +357,7 @@ void main()
 
     vec4 waterPass = texture2D(colortex11, uv);
     vec4 skyPass = texture2D(colortex12, uv);
+    skyPass.rgb = pow(skyPass.rgb, vec3(2.2));
 
     // Get coordinate spaces
     vec3 clipSpace = vec3(uv, depth) * 2. - 1.;
@@ -511,14 +507,14 @@ void main()
 
     // Brighten near the sun object
     float sunTintFac = max(dot(shadowLightPosition * .01, normalize(view)), 0.);
-    sunTintFac = pow(sunTintFac, 8.) + (pow(sunTintFac, 2.) * .2);
+    sunTintFac = pow(sunTintFac, 7.) + (pow(sunTintFac, 1.8) * .3);
     // sunTintFac *= .5;
     sunTintFac *= 1. - lightSourceTransitionMask;
     sunTintFac *= eyeSkyBrightnessFac;
 
     // Get color
     // vec3 fogCol = pow(fogColor, vec3(2.2));
-    vec3 fogCol = skyPass.rgb;
+    vec3 fogCol = mix(pow(fogColor, vec3(2.2)), skyPass.rgb, eyeSkyBrightnessFac);
     // fogCol = mix(fogCol * undergroundFogDim, fogCol, vec3(eyeSkyBrightnessFac) * (1. - isEyeInWater));
     // fogCol = isEyeInWater == 0 ? fogCol : waterFogCol * .2;
     vec3 lightFogCol = mix(moonFogCol, sunFogCol, smoothstep(.5, .8, dayNightFac));
@@ -548,7 +544,8 @@ void main()
     float sunMask = 1. - (3.5 * (-albedoLum + .95)); // Gradualy select very bright pixels
     sunMask = clamp(sunMask, 0., 1.);
     screenAddLight = 1. - (1. - skyPass.rgb) * (1. - lightFogCol);
-    vec3 skyAlbedo = mix(skyPass.rgb, screenAddLight, sunTintFac);
+    vec3 skyAlbedo = skyPass.rgb;
+    skyAlbedo = mix(skyAlbedo.rgb, screenAddLight, sunTintFac); // Add sun tint
     col = mix(col, skyAlbedo, skyMask); // Seperate the sky
     col = mix(col, col + albedo * 2., skyMask);
 
@@ -566,7 +563,7 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(fwidth(viewDepth));
-    col = viewLayer(col, texCoord, vec3(skyPass));
+    col = viewLayer(col, texCoord, vec3(fogFac));
 
     /* RENDERTARGETS:5,6,8,9 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render

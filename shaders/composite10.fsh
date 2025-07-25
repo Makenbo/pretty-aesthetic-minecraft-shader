@@ -4,6 +4,7 @@
 
 #version 420
 
+#include "shader_settings.glsl"
 #include "util/post_col.glsl"
 
 /// Attributes -------------------------------------------------------
@@ -26,10 +27,13 @@ uniform mat4 gbufferProjectionInverse;
 
 void main()
 {
-    float lumMask = texture2D(colortex6, texCoord).r;
-    vec3 blocklightMask = texture2D(colortex9, texCoord).rgb;
-
     /* RENDERTARGETS:7,10 */
-    gl_FragData[0] = vec4(lumMask, 0., 0., 1.);
+
+    #ifdef LOCAL_TONE_MAPPING
+        float lumMask = texture2D(colortex6, texCoord).r;
+        gl_FragData[0] = vec4(lumMask, 0., 0., 1.);
+    #endif
+
+    vec3 blocklightMask = texture2D(colortex9, texCoord).rgb;
     gl_FragData[1] = vec4(blocklightMask, 1.);
 }

@@ -14,6 +14,11 @@ uniform mat4 gbufferProjectionInverse;
 uniform vec3 fogColor;
 uniform vec3 skyColor;
 
+uniform int isEyeInWater;
+const int GL_LINEAR = 9729;
+const int GL_EXP = 2048;
+uniform int fogMode;
+
 // Get original sky -----------------------------------------------
 // Functions taken from the Base-330 template
 
@@ -42,13 +47,33 @@ void main()
     vec3 pos = screenToView(vec3(gl_FragCoord.xy / vec2(viewWidth, viewHeight), 1.0));
 
     vec4 skyCol = color;
-    skyCol.rgb = mix(skyCol.rgb, gl_Fog.color.rgb, min(gl_FogFragCoord * .005, 1.));
-    skyCol.rgb = mix(skyCol.rgb, color.rgb, 1. - color.a);
-    // skyCol.a = pow(skyCol.a, 30.) * 99999999.;
+    // skyCol.rgb = mix(skyCol.rgb, gl_Fog.color.rgb, min(gl_FogFragCoord * .005, 1.));
+    // skyCol.rgb = mix(skyCol.rgb, color.rgb, 1. - color.a);
+    skyCol.rgb = mix(color.rgb, gl_Fog.color.rgb, clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
+
+    vec4 stars = vec4(0., 0., 0., 1.);
+
+    // skyCol = vec4(calcSkyColor(normalize(pos)), color.a);
+    skyCol.rgb = mix(skyCol.rgb, calcSkyColor(normalize(pos)), clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
+    if (renderStage == MC_RENDER_STAGE_STARS)
+    {
+        skyCol = vec4(0., 0., 0., 1.);
+        stars = color;
+    }
+
+    // skyCol.rgb = pow(skyCol.rgb, vec3(2.2));
 
     /* RENDERTARGETS:0,12 */
-    gl_FragData[0] = vec4(0., 0., 0., 1.);
+    gl_FragData[0] = stars;
     gl_FragData[1] = skyCol;
+    // gl_FragData[1] = color;
+	// if (fogMode == GL_EXP) {
+	// 	gl_FragData[1].rgb = mix(gl_FragData[1].rgb, gl_Fog.color.rgb, 1.0 - clamp(exp(-gl_Fog.density * gl_FogFragCoord), 0.0, 1.0));
+	// } else if (fogMode == GL_LINEAR) {
+	// 	gl_FragData[1].rgb = mix(gl_FragData[1].rgb, gl_Fog.color.rgb, clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
+	// } else if (isEyeInWater == 1.0 || isEyeInWater == 2.0){
+	// 	gl_FragData[1].rgb = mix(gl_FragData[1].rgb, gl_Fog.color.rgb, 1.0 - clamp(exp(-gl_Fog.density * gl_FogFragCoord), 0.0, 1.0));
+	// }
 	// gl_FragData[1] = color;
     // gl_FragData[1].rgb = mix(gl_FragData[0].rgb, gl_Fog.color.rgb, clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
 	// gl_FragData[1].rgb = vec3(color.a);
