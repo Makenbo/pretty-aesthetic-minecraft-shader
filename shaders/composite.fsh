@@ -14,7 +14,7 @@ varying vec2 texCoord;
 #define DAY_NIGHT_TRANSITION_TIME 500.
 
 // Lighting
-const float sunIntensity = 7.;
+const float sunIntensity = 6.;
 const float ambientSunIntensity = 2.;
 const float moonIntensity = .6;
 const float ambientMoonIntensity = 1.;
@@ -28,6 +28,7 @@ const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
 const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
 // const vec3 torchCol = vec3(1.) * .7 * 4.;
 const vec3 torchCol = vec3(1., .6, .2) * 4.;
+// const vec3 torchCol = vec3(.4, .9, 1.) * 4.;
 const vec3 coldAmbient = daySkyCol;
 const vec3 warmAmbient = vec3(.9, .8, .7);
 

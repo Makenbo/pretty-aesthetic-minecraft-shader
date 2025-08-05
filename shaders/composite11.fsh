@@ -17,9 +17,9 @@ in vec2 texCoord;
 
 /// Custom textures -----------------------------------------------
 
-uniform sampler2D colortex7;    // Low res luma mask to blur
+uniform sampler2D colortex7;     // Low res luma mask to blur
 uniform sampler2D colortex10;    // Low res bloclight mask to blur
-uniform sampler2D colortex8;    // full res corrected depth
+uniform sampler2D colortex8;     // full res corrected depth
 
 /*
 const int colortex7Format = R8;
@@ -41,6 +41,6 @@ void main()
         gl_FragData[0] = vec4(lum, 0., 0., 1.);
     #endif
 
-    vec3 blockCol = GaussBlur3f(colortex10, texCoord, texSize, BLUR_DIR);
-    gl_FragData[1] = vec4(blockCol, 1.);
+    // vec3 blockCol = GaussBlur3f(colortex10, texCoord, texSize, BLUR_DIR);
+    // gl_FragData[1] = vec4(blockCol, 1.);
 }

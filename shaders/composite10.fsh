@@ -34,6 +34,6 @@ void main()
         gl_FragData[0] = vec4(lumMask, 0., 0., 1.);
     #endif
 
-    vec3 blocklightMask = texture2D(colortex9, texCoord).rgb;
-    gl_FragData[1] = vec4(blocklightMask, 1.);
+    // vec3 blocklightMask = texture2D(colortex9, texCoord).rgb;
+    // gl_FragData[1] = vec4(blocklightMask, 1.);
 }

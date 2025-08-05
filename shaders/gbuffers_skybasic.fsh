@@ -42,6 +42,8 @@ vec3 screenToView(vec3 screenPos)
 
 // ---------------------------------------------------
 
+// Code segments taken from Base-330 template and Sildur's Enhanced Default pack
+
 void main()
 {
     vec3 pos = screenToView(vec3(gl_FragCoord.xy / vec2(viewWidth, viewHeight), 1.0));
