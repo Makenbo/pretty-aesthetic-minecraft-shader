@@ -52,7 +52,7 @@ void main()
     // Post --------------------------------------------------------
 
     // Tonemap (linear to linear)
-    // col = tonemap(col);
+    col = tonemap(col);
     
     // Gamma correction (linear to gamma 2.2)
     col = ToDisplay(col);

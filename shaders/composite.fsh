@@ -71,7 +71,7 @@ uniform sampler2D colortex12;   // sky layer
 
 /*
 const int colortex0Format = RGBA8;
-const int colortex1Format = RGB8;
+const int colortex1Format = RGB16;
 const int colortex2Format = RG16;
 const int colortex3Format = R16;
 const int colortex4Format = RGBA8;
