@@ -274,39 +274,18 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
     float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
     shadowBias *= .0005;
 
-    #if SHADOW_FILTER_SAMPLES == 16
-        // Sample and filter shadow
-        vec3 result = vec3(0.);
-        for (int i = 0; i < 16; i++)
-        {
-            vec2 off = rndRot * poissonDisk4x4[i] * blurScale;
-            vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
-            sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
-            result += SampleShadow(sampleCoord, phongDiff, shadowBias, 0.);
-        }
-        result /= 16.;
-    #endif
-
-    
-    #if SHADOW_FILTER_SAMPLES == 4
-        // blurScale *= 2.;
-
-        // Sample and filter shadow
-        vec3 result = vec3(0.);
-        for (int i = 0; i < 4; i++)
-        {
-            vec2 off = rndRot * poissonDisk2x2[i] * blurScale;
-            vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
-            sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
-            result += SampleShadow(sampleCoord, phongDiff, shadowBias, 0.);
-        }
-        result /= 4.;
-    #endif
+    // Sample and filter shadow
+    vec3 result = vec3(0.);
+    for (int i = 0; i < SHADOW_FILTER_SAMPLES; i++)
+    {
+        vec2 off = rndRot * poissonDisk4x4[i] * blurScale;
+        vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
+        sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
+        result += SampleShadow(sampleCoord, phongDiff, shadowBias, 0.);
+    }
+    result /= SHADOW_FILTER_SAMPLES;
 
     // return vec3(lod);
-
-    // result = smoothstep(0., 1., result);
-    // result = pow(result, vec3(2.));
     // return vec3(shadowDist);
 
     return result;
@@ -343,7 +322,7 @@ void main()
     vec2 uv = texCoord;
 
     // Debug view
-    uv = modifyUVs(uv);
+    // uv = modifyUVs(uv);
 
     // Get render passes ----------------------------------------
 
@@ -564,7 +543,7 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(fwidth(viewDepth));
-    col = viewLayer(col, texCoord, vec3(fogFac));
+    // col = viewLayer(col, texCoord, vec3(reflection));
 
     /* RENDERTARGETS:5,6,8,9 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render

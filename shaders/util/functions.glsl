@@ -8,6 +8,12 @@ float linearizeDepth(float depth, float near, float far)
     return (near * far) / (depth * (near - far) + far);
 }
 
+vec3 projectAndDivide(mat4 matrix, vec3 position)
+{
+    vec4 homogeneousPos = matrix * vec4(position, 1.);
+    return homogeneousPos.xyz / homogeneousPos.w;
+}
+
 // Blurs -----------------------------------------------------------------------------------------
 
 #define DEPTH_MARGIN 1.

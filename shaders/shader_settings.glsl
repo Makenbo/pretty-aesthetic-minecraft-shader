@@ -1,7 +1,7 @@
 // Shadows
 
 #define VARIABLE_PENUMBRA // Shadows are softer the further they are
-#define SHADOW_FILTER_SAMPLES 16 // [4 16] Determines noisiness of blurred shadows
+#define SHADOW_FILTER_SAMPLES 16 // [4 6 8 12 16] Determines noisiness of blurred shadows
 
 // Effects
 

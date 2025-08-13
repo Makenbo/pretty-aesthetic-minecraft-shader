@@ -18,7 +18,7 @@ in vec2 texCoord;
 /// Custom textures -----------------------------------------------
 
 uniform sampler2D colortex7;     // Low res luma mask to blur
-uniform sampler2D colortex10;    // Low res bloclight mask to blur
+uniform sampler2D colortex10;    // Low res blocklight mask to blur
 uniform sampler2D colortex8;     // full res corrected depth
 
 /*
