@@ -54,9 +54,10 @@ const float ambientOcclusionLevel = 1.;
 #define NIGHT_VISION_AMBIENT_MULT 1.5
 #define NIGHT_VISION_FOG_DENSITY_INV 7.
 
-// Built-in resolutions
+// Modifiable variables
 const int shadowMapResolution = 2048; // [512 1024 1536 2048 4096]
 const int noiseTextureResolution = 128;
+const float sunPathRotation = -40.;
 
 /// Uniforms --------------------------------------------------------
 
@@ -103,6 +104,7 @@ uniform float viewWidth;
 uniform float viewHeight;
 uniform float near;
 uniform float far;
+uniform vec3 skyColor;
 uniform vec3 fogColor;
 uniform vec3 cameraPosition;
 uniform int worldTime;
@@ -112,6 +114,7 @@ uniform float nightVision;
 
 uniform mat4 gbufferProjectionInverse;
 uniform mat4 gbufferModelViewInverse;
+uniform mat4 gbufferModelView;
 uniform mat4 shadowModelView;
 uniform mat4 shadowProjection;
 
@@ -316,6 +319,31 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float phongMask, float skyDiffuse)
     return shadowPass;
 }
 
+/// Fog ---------------------------------------------------
+
+float GetSunTintFac(vec3 viewSpace)
+{
+    float sunTintFac = max(dot(shadowLightPosition * .01, normalize(viewSpace)), 0.);
+    sunTintFac = pow(sunTintFac, 7.) + (pow(sunTintFac, 1.8) * .3);
+
+    return sunTintFac;
+}
+
+/// Arbitrarily sample sky ---------------------------------------
+// Functions taken from the Base-330 template
+
+float fogify(float x, float w)
+{
+	return w / (x * x + w);
+}
+
+vec3 calcSkyColor(vec3 pos)
+{
+	float upDot = dot(pos, gbufferModelView[1].xyz); //not much, what's up with you?
+    upDot = pow(upDot, .45);
+	return mix(skyColor, fogColor, fogify(max(upDot, 0.0), 0.25));
+}
+
 /// Main ----------------------------------------------
 
 void main()
@@ -323,7 +351,7 @@ void main()
     vec2 uv = texCoord;
 
     // Debug view
-    uv = modifyUVs(uv);
+    // uv = modifyUVs(uv);
 
     // Get render passes ----------------------------------------
 
@@ -488,9 +516,7 @@ void main()
     fogHeightMult *= mix(1., worldXZperlin * worldYperlin, 1.);
 
     // Brighten near the sun object
-    float sunTintFac = max(dot(shadowLightPosition * .01, normalize(view)), 0.);
-    sunTintFac = pow(sunTintFac, 7.) + (pow(sunTintFac, 1.8) * .3);
-    // sunTintFac *= .5;
+    float sunTintFac = GetSunTintFac(view);
     sunTintFac *= 1. - lightSourceTransitionMask;
     sunTintFac *= eyeSkyBrightnessFac;
 
@@ -512,6 +538,18 @@ void main()
     fogFac = mix(fogFac, fogDepth * 2., fogHeightMult * fogLuma * (1. - nightVision*.9));
     fogFac = ReinhardtTonemap(fogFac * 4.) * 1.25;
     fogFac = min(fogFac, 1.);
+
+    // Sky water reflection
+    float waterFresnel = 1. - abs(dot(normalize(view), normal));
+    waterFresnel = pow(waterFresnel, 2.);
+    vec3 reflDir = normalize(reflect(view, normal));
+    float reflSunTintFac = GetSunTintFac(reflDir);
+    reflSunTintFac *= 1. - lightSourceTransitionMask;
+    reflSunTintFac *= eyeSkyBrightnessFac;
+    vec3 skyReflection = pow(calcSkyColor(reflDir), vec3(2.2));
+    screenAddLight = 1. - (1. - skyReflection) * (1. - lightFogCol);
+    skyReflection = mix(skyReflection, screenAddLight, reflSunTintFac);
+    // col += skyReflection * waterFresnel;
 
     // Actually add fog
     // Darken when bright fog
@@ -545,11 +583,12 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(fwidth(viewDepth));
-    col = viewLayer(col, texCoord, vec3(vanillaAO));
+    // col = viewLayer(col, texCoord, vec3(skyReflection));
 
-    /* RENDERTARGETS:5,6,8,9 */
+    /* RENDERTARGETS:5,6,8,9,13 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
     gl_FragData[1] = vec4(lumMask, 0., 0., 1.); // Luma mask for local tone mapping
     gl_FragData[2] = vec4(viewDepth, 0., 0., 1.); // Corrected view depth mask
     gl_FragData[3] = vec4(lightmapBlockCol, 1.); // Blocklight objects
+    gl_FragData[4] = vec4(skyReflection * waterFresnel, fogFac); // Blocklight objects
 }

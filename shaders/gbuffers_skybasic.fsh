@@ -51,18 +51,19 @@ void main()
     vec4 skyCol = color;
     // skyCol.rgb = mix(skyCol.rgb, gl_Fog.color.rgb, min(gl_FogFragCoord * .005, 1.));
     // skyCol.rgb = mix(skyCol.rgb, color.rgb, 1. - color.a);
+
     skyCol.rgb = mix(color.rgb, gl_Fog.color.rgb, clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
+    skyCol.rgb = mix(skyCol.rgb, calcSkyColor(normalize(pos)), clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
 
     vec4 stars = vec4(0., 0., 0., 1.);
 
-    // skyCol = vec4(calcSkyColor(normalize(pos)), color.a);
-    skyCol.rgb = mix(skyCol.rgb, calcSkyColor(normalize(pos)), clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
     if (renderStage == MC_RENDER_STAGE_STARS)
     {
         skyCol = vec4(0., 0., 0., 1.);
         stars = color;
     }
 
+    // skyCol = vec4(calcSkyColor(normalize(pos)), color.a);
     // skyCol.rgb = pow(skyCol.rgb, vec3(2.2));
 
     /* RENDERTARGETS:0,12 */
