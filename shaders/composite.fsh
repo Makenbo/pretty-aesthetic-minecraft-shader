@@ -202,15 +202,16 @@ vec3 SampleShadow(in vec3 sampleCoord, float phongDiff, float bias, float colorF
     // Shadow masks
     float shadow =         GetShadowMask(shadowtex0, sampleCoord, bias) * phongDiff;
     float shadowNoTransp = GetShadowMask(shadowtex1, sampleCoord, bias) * phongDiff;
+    float transparentObjects = shadowNoTransp - shadow;
+
+    if (transparentObjects < .1) return vec3(shadow); // Early return for opaque objects
+
     vec4 shadowCol = texture2D(shadowcolor0, sampleCoord.xy);
     vec3 transmittedCol = shadowCol.rgb + (1. - shadowCol.a);
-    float transparentObjects = shadowNoTransp - shadow;
 
     // Combine masks
     vec3 result = shadow + transparentObjects * transmittedCol;
-    // result += transmittedCol * colorFac + vec3(colorFac * .5);
     
-    // return vec3(shadow);
     return result;
 }
 
@@ -322,7 +323,7 @@ void main()
     vec2 uv = texCoord;
 
     // Debug view
-    // uv = modifyUVs(uv);
+    uv = modifyUVs(uv);
 
     // Get render passes ----------------------------------------
 
@@ -463,6 +464,7 @@ void main()
     vec3 lightCol = mix(moonCol * moonIntensity, sunCol * sunIntensity, smoothstep(.5, 1., dayNightFac));
     lightCol = mix(lightCol, lightCol * dimmingAtNoon, noonDimFac);
     vec3 sunlight = diffuse * lightCol * shadowsFac;
+    // vanillaAO = mix(vanillaAO, pow(vanillaAO, 3.), smoothstep(1., 10., length(sunlight + lightmapCol)));
     vec3 col = albedo * (lightmapCol + sunlight + ambient) * vanillaAO;
 
     // vec3 worldNormals = vec3(gbufferModelViewInverse * vec4(normal, 1.));
@@ -543,7 +545,7 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(fwidth(viewDepth));
-    // col = viewLayer(col, texCoord, vec3(reflection));
+    col = viewLayer(col, texCoord, vec3(vanillaAO));
 
     /* RENDERTARGETS:5,6,8,9 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render

@@ -62,7 +62,7 @@ void main()
         float stepSize = STEP_SIZE_MAG / length(dir.xy);
         vec3 marchPos = viewSpace + (dir * STEP_SIZE_MAG);
         vec3 screenspaceMarchPos = vec3(0.);
-        float fac = .5;
+        float fac = 1.;
         for (int i = 0; i < STEP_AMOUNT; i++)
         {
             screenspaceMarchPos = projectAndDivide(gbufferProjection, marchPos); // P matrix
