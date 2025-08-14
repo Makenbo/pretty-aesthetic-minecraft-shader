@@ -15,10 +15,10 @@ varying vec2 texCoord;
 
 // Lighting
 const float sunIntensity = 6.;
-const float ambientSunIntensity = 2.;
+const float ambientSunIntensity = 2.5;
 const float moonIntensity = .6;
-const float ambientMoonIntensity = 1.;
-const float dimmingAtNoon = .8;
+const float ambientMoonIntensity = 1.5;
+const float dimmingAtNoon = .6;
 const vec3 skyUnderwaterMult = vec3(.3, .7, 1.) * 4.;
 const vec3 sunCol = vec3(.85, 1., .7);
 const vec3 moonCol = vec3(.2, .35, 1.);
@@ -27,7 +27,7 @@ const vec3 undergroundAmbient = vec3(.03, .06, .1) * 1.;
 const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
 const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
 // const vec3 torchCol = vec3(1.) * .7 * 4.;
-const vec3 torchCol = vec3(1., .6, .2) * 4.;
+const vec3 torchCol = vec3(1., .5, .15) * 4.;
 // const vec3 torchCol = vec3(.4, .9, 1.) * 4.;
 const vec3 coldAmbient = daySkyCol;
 const vec3 warmAmbient = vec3(.9, .8, .7);
@@ -351,7 +351,7 @@ void main()
     vec2 uv = texCoord;
 
     // Debug view
-    // uv = modifyUVs(uv);
+    uv = modifyUVs(uv);
 
     // Get render passes ----------------------------------------
 
@@ -396,13 +396,22 @@ void main()
         float linearDepth = linearizeDepth(depth, near, far);
         float screenArea = length(vec2(dFdx(linearDepth), dFdy(linearDepth)));
         vec3 normal = BlurRenderPass(colortex1, uv, depthtex0, linearDepth, screenArea);
-        // vanillaAO = BlurAOPass(colortex0, uv, depthtex0, linearDepth);
+        vanillaAO = BlurAOPass(colortex0, uv, depthtex0, linearDepth);
     #endif
 
     normal = normalize(normal * 2. - 1.);
+    vec3 worldNormals = vec3(gbufferModelViewInverse * vec4(normal, 1.));
+    worldNormals = normalize(worldNormals);
 
     vanillaAO = mix(vanillaAO, 1., grass);
     vanillaAO = mix(vanillaAO, 1., waterPass.a * .5);
+    float xBias = abs(dot(worldNormals, vec3(1., 0., 0.)));
+    float yBias = dot(worldNormals, vec3(0., 1., 0.)) * .5 + .5;
+    float zBias = abs(dot(worldNormals, vec3(0., 0., 1.)));
+    vanillaAO = mix(vanillaAO, vanillaAO * .32, step(.8, yBias));
+    vanillaAO = mix(vanillaAO, vanillaAO * 1.5, step(yBias, .2));
+    vanillaAO = mix(vanillaAO, vanillaAO * .53, zBias);
+    vanillaAO *= 2.;
 
     // Eye brightness
     float eyeSkyBrightnessFac = float(eyeBrightnessSmooth.y) / 240.;
@@ -447,10 +456,6 @@ void main()
         vec3 ambientSunAmbientCol = mix(coldAmbient, warmAmbient, lightmap.y);
         ambientSunAmbientCol = mix(moonCol, ambientSunAmbientCol, dayNightFac);
         vec3 ambientSunlight = ambientSunAmbientCol * ambientIntensity;
-        vec3 ambientCol = mix(ambientSunlight, skyCol, vec3(shadowsFac));
-        ambientCol = mix(ambientCol, ambientCol * skyUnderwaterMult, isEyeInWater);
-
-    vec3 lightmapCol = lightmap.x * torchCol + lightmap.y * ambientCol;
 
     // Shadows
     float phongDiffuse = max(dot(normal, shadowLightPosition * .01), 0.);
@@ -487,32 +492,12 @@ void main()
     // waterCol = mix(waterCol, waterCol * (waterPass.rgb * 3.), 1.);
     // waterCol = mix(waterCol, waterFogCol * .2, waterFogFac); // "Light absorption"
 
-    // Combine lighting ---------------------------------------------------
-
-    vec3 lightCol = mix(moonCol * moonIntensity, sunCol * sunIntensity, smoothstep(.5, 1., dayNightFac));
-    lightCol = mix(lightCol, lightCol * dimmingAtNoon, noonDimFac);
-    vec3 sunlight = diffuse * lightCol * shadowsFac;
-    // vanillaAO = mix(vanillaAO, pow(vanillaAO, 3.), smoothstep(1., 10., length(sunlight + lightmapCol)));
-    vec3 col = albedo * (lightmapCol + sunlight + ambient) * vanillaAO;
-
-    // vec3 worldNormals = vec3(gbufferModelViewInverse * vec4(normal, 1.));
-    // worldNormals = normalize(worldNormals);
-    // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
-
-    // Fog -------------------------------------------------------
-
-    // Water
-    col = mix(col, col * waterTint * 2., waterMask); // Water blue-ish tint
-    // col = mix(col, screenAddLight, sunTintFac * waterMask * fogFac); // Add sun tint
-    col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
-    vec3 waterSurfaceCol = waterPass.rgb;
-    waterSurfaceCol = max(waterSurfaceCol, 0.);
-    col = mix(col, col * waterSurfaceCol * 2.5 + waterPass.rgb * (lightmapCol + sunlight + ambient) * .05, waterMask); // Draw water surface
+    // Calculate fog -------------------------------------------------------
 
     // Height based fog
-    float worldXZperlin = texture2D(colortex9, fract(worldStatic.xz * .003)).r;
-    float worldYperlin = texture2D(colortex9, fract(worldStatic.xz * .003) + frameCounter * .0001).g;
-    float fogHeightMult = clamp(pow(-world.y * .025, 2.5), 0., .7) * step(world.y, 0);
+    float worldXZperlin = texture2D(colortex9, fract(worldStatic.xz * .003)).r + .3;
+    float worldYperlin = texture2D(colortex9, fract(worldStatic.xz * .003) + frameCounter * .0001).g + .3;
+    float fogHeightMult = clamp(pow(-world.y * .01, 1.5), 0., .7) * step(world.y, 0); // not in 0-1 range
     fogHeightMult *= mix(1., worldXZperlin * worldYperlin, 1.);
 
     // Brighten near the sun object
@@ -539,6 +524,8 @@ void main()
     fogFac = ReinhardtTonemap(fogFac * 4.) * 1.25;
     fogFac = min(fogFac, 1.);
 
+    shadowsFac *= smoothstep(.4, .0, fogFac); // "diffuse" shadows in fog
+
     // Sky water reflection
     float waterFresnel = 1. - abs(dot(normalize(view), normal));
     waterFresnel = pow(waterFresnel, 2.);
@@ -551,7 +538,30 @@ void main()
     skyReflection = mix(skyReflection, screenAddLight, reflSunTintFac);
     // col += skyReflection * waterFresnel;
 
-    // Actually add fog
+    
+    // Combine lighting ---------------------------------------------------
+
+    vec3 ambientCol = mix(ambientSunlight, skyCol, vec3(shadowsFac));
+    ambientCol = mix(ambientCol, ambientCol * skyUnderwaterMult, isEyeInWater);
+    vec3 lightmapCol = lightmap.x * torchCol + lightmap.y * ambientCol;
+
+    vec3 lightCol = mix(moonCol * moonIntensity, sunCol * sunIntensity, smoothstep(.5, 1., dayNightFac));
+    lightCol = mix(lightCol, lightCol * dimmingAtNoon, noonDimFac);
+    vec3 sunlight = diffuse * lightCol * shadowsFac;
+    // vanillaAO = mix(vanillaAO, pow(vanillaAO, 3.), smoothstep(1., 10., length(sunlight + lightmapCol)));
+    vec3 col = albedo * (lightmapCol + sunlight + ambient) * vanillaAO;
+
+    // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
+
+    // Water fog ------------------------------------------------------
+    col = mix(col, col * waterTint * 2., waterMask); // Water blue-ish tint
+    // col = mix(col, screenAddLight, sunTintFac * waterMask * fogFac); // Add sun tint
+    col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
+    vec3 waterSurfaceCol = waterPass.rgb;
+    waterSurfaceCol = max(waterSurfaceCol, 0.);
+    col = mix(col, col * waterSurfaceCol * 2.5 + waterPass.rgb * (lightmapCol + sunlight + ambient) * .05, waterMask); // Draw water surface
+
+    // Apply fog -----------------------------------------------------------
     // Darken when bright fog
     col = mix(col, col * .2, vec3(fogFac) * (1. - isEyeInWater) * length(fogColor));
     // Overworld fog
@@ -582,8 +592,8 @@ void main()
 
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
-    // col = vec3(fwidth(viewDepth));
-    // col = viewLayer(col, texCoord, vec3(skyReflection));
+    // col = vec3(vanillaAO);
+    col = viewLayer(col, texCoord, vec3(shadowsFac));
 
     /* RENDERTARGETS:5,6,8,9,13 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render

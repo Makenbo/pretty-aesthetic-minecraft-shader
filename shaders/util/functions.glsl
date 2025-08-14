@@ -14,6 +14,11 @@ vec3 projectAndDivide(mat4 matrix, vec3 position)
     return homogeneousPos.xyz / homogeneousPos.w;
 }
 
+float colToLum(vec3 col)
+{
+    return dot(col, vec3(.2126, .7152, .0722));
+}
+
 // Blurs -----------------------------------------------------------------------------------------
 
 #define DEPTH_MARGIN 1.

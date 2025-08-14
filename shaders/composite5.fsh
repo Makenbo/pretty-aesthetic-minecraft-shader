@@ -35,6 +35,7 @@ uniform int frameCounter;
 uniform float viewWidth;
 uniform float viewHeight;
 
+uniform ivec2 eyeBrightnessSmooth;
 uniform vec3 skyColor;
 uniform vec3 fogColor;
 
@@ -71,6 +72,8 @@ void main()
     vec3 normal = texture2D(colortex1, uv).rgb;
     normal = normalize(normal * 2. - 1.);
     float waterLayer = texture2D(colortex11, uv).a;
+
+    float eyeSkyBrightnessFac = float(eyeBrightnessSmooth.y) / 240.;
 
     // Get coordinate spaces
     vec3 clipSpace = vec3(uv, depth) * 2. - 1.;
@@ -125,7 +128,7 @@ void main()
         vec3 reflection = texture2D(colortex5, screenspaceMarchPos.xy).rgb;
         // if (dot(reflection, vec3(.2126, .7152, .0722)) > .8 && hitSky) fac = 1.;
         reflection *= fac;
-        reflection = mix(skyReflection, reflection, fac);
+        reflection = mix(reflection, skyReflection, (1.-fac) * eyeSkyBrightnessFac);
         // vec3 result = mix(srcCol, reflection, fac);
         result = srcCol + (reflection * waterLayer * waterFresnel * (1. - fogFac));
     }
