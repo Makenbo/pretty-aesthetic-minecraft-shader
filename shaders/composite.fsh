@@ -37,7 +37,7 @@ const vec3 warmLightSrcCol = vec3(1., .7, .2);
 
 // Fog
 #define FOG_DENSITY_INV 4.
-const vec3 sunFogCol = vec3(1.5, .9, 0.) * 2.;
+const vec3 sunFogCol = vec3(1.5, 1., 0.) * 2.5;
 const vec3 moonFogCol = vec3(.2, .35, .7) * .5;
 const float undergroundFogDim = .2;
 
@@ -91,9 +91,9 @@ uniform sampler2D shadowtex1;   // Excludes transparent geometry
 uniform sampler2D shadowcolor0; // Albedo from the sun
 uniform sampler2D noisetex;
 
-// const bool shadowtex0Nearest = true;
-// const bool shadowtex1Nearest = true;
-// const bool shadowcolor0Nearest = true;
+const bool shadowtex0Nearest = true;
+const bool shadowtex1Nearest = true;
+const bool shadowcolor0Nearest = true;
 // const bool generateShadowMipmap = true;
 
 // Constants
@@ -313,7 +313,7 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float phongMask, float skyDiffuse)
     texelSize *= 8.;
 
     // Filter shadows
-    // vec3 shadowPass = SampleShadow(shadowSampleCoord, normal, .001, 0.);
+    // vec3 shadowPass = SampleShadow(shadowSampleCoord, phongMask, .001, 0.);
     vec3 shadowPass = ShadowFilter(shadowSampleCoord, phongMask, skyDiffuse, texelSize);
     // return texelSize;
     return shadowPass;
@@ -403,14 +403,20 @@ void main()
     vec3 worldNormals = vec3(gbufferModelViewInverse * vec4(normal, 1.));
     worldNormals = normalize(worldNormals);
 
+    // Exclude some blocks with weird artifacts
     vanillaAO = mix(vanillaAO, 1., grass);
+    float leavesFac = mix(0., leaves, smoothstep(10., 100., viewDepth));
+    vanillaAO = mix(vanillaAO, .7, leaves);
     vanillaAO = mix(vanillaAO, 1., waterPass.a * .5);
+    // vanillaAO = mix(vanillaAO, 1., waterPass.a * .5);
+    // Normalize vanilla AO to not have vanilla sunlight
     float xBias = abs(dot(worldNormals, vec3(1., 0., 0.)));
     float yBias = dot(worldNormals, vec3(0., 1., 0.)) * .5 + .5;
     float zBias = abs(dot(worldNormals, vec3(0., 0., 1.)));
-    vanillaAO = mix(vanillaAO, vanillaAO * .32, step(.8, yBias));
-    vanillaAO = mix(vanillaAO, vanillaAO * 1.5, step(yBias, .2));
-    vanillaAO = mix(vanillaAO, vanillaAO * .53, zBias);
+    float opaqueObjects = 1. - min(translucents + waterPass.a, 1.);
+    vanillaAO = mix(vanillaAO, vanillaAO * .32, step(.8, yBias) * opaqueObjects);
+    vanillaAO = mix(vanillaAO, vanillaAO * 1.5, step(yBias, .2) * opaqueObjects);
+    vanillaAO = mix(vanillaAO, vanillaAO * .53, zBias * opaqueObjects);
     vanillaAO *= 2.;
 
     // Eye brightness
@@ -593,7 +599,7 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(vanillaAO);
-    col = viewLayer(col, texCoord, vec3(shadowsFac));
+    col = viewLayer(col, texCoord, vec3(vanillaAO));
 
     /* RENDERTARGETS:5,6,8,9,13 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
