@@ -24,6 +24,7 @@ void main()
     gl_FragData[0] = albedo;
     gl_FragData[1] = vec4(normal * .5 + .5, 1.);
     gl_FragData[2] = vec4(lightmapCoords, 0., 1.);
-    gl_FragData[3] = vec4(entityID / 10000., 0., 1.);
+    // gl_FragData[3] = vec4(entityID / 10000., 0., 1.);
+    gl_FragData[3] = vec4(100. / 10000., 0., 0., 1.);
     gl_FragData[4] = color;
 }

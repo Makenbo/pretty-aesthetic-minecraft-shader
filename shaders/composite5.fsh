@@ -123,14 +123,14 @@ void main()
 
         /// Combine ----------------------------------------------------
         float waterFresnel = 1. - abs(dot(normalize(viewSpace), normal));
-        waterFresnel = pow(waterFresnel, 2.);
+        waterFresnel = pow(waterFresnel, 4.);
 
         vec3 reflection = texture2D(colortex5, screenspaceMarchPos.xy).rgb;
         // if (dot(reflection, vec3(.2126, .7152, .0722)) > .8 && hitSky) fac = 1.;
         reflection *= fac;
         reflection = mix(reflection, skyReflection, (1.-fac) * eyeSkyBrightnessFac);
-        // vec3 result = mix(srcCol, reflection, fac);
         result = srcCol + (reflection * waterLayer * waterFresnel * (1. - fogFac));
+        // result = vec3(waterFresnel);
     }
 
     /* RENDERTARGETS:5 */

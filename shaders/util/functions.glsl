@@ -19,6 +19,12 @@ float colToLum(vec3 col)
     return dot(col, vec3(.2126, .7152, .0722));
 }
 
+vec3 desaturate(vec3 col, float fac)
+{
+    float lum = colToLum(col);
+    return mix(col, vec3(lum), fac);
+}
+
 // Blurs -----------------------------------------------------------------------------------------
 
 #define DEPTH_MARGIN 1.
