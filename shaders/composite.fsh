@@ -571,12 +571,13 @@ void main()
     // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
 
     // Water fog ------------------------------------------------------
-    col = mix(col, col * waterTint * 2., waterMask); // Water blue-ish tint
     // col = mix(col, screenAddLight, sunTintFac * waterMask * fogFac); // Add sun tint
+    col = mix(col, col * waterTint * 2., waterMask); // Water blue-ish tint
     col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
     vec3 waterSurfaceCol = desaturate(waterPass.rgb, 1.) * 1.5;
     waterSurfaceCol = max(waterSurfaceCol, 0.);
     // waterSurfaceCol = waterSurfaceCol * 2.5 + waterPass.rgb * (lightmapCol + sunlight + ambient) * .05;
+    waterSurfaceCol += lightmapCol * .7; // Add a bit of underwater light
     col = mix(col, col * waterSurfaceCol, waterMask); // Draw water surface
 
     // Apply fog -----------------------------------------------------------
@@ -611,7 +612,7 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(vanillaAO);
-    col = viewLayer(col, texCoord, vec3(waterPass.rgb));
+    col = viewLayer(col, texCoord, vec3(waterSurfaceCol));
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render

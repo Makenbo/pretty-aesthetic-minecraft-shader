@@ -108,11 +108,14 @@ void main()
             }
 
             if (screenspaceMarchPos.z > sampleDepth)
-                break;
-
-            if (i == STEP_AMOUNT-1 && step(1., sampleDepth) > .95 && dir.z < 0.) // Show sky in reflections
             {
-                fac = 0.;
+                if (screenspaceMarchPos.z - sampleDepth > .005) fac = 0.;
+                break;
+            }
+
+            if (i == STEP_AMOUNT-1 && step(1., sampleDepth) > .95 && dir.z < 0.)
+            {
+                fac = 0.; // Show sky in reflections
                 hitSky = true;
                 break;
             }
@@ -125,12 +128,14 @@ void main()
         float waterFresnel = 1. - abs(dot(normalize(viewSpace), normal));
         waterFresnel = pow(waterFresnel, 4.);
 
+        float screenFacOff = smoothstep(.0, .5, length(screenspaceMarchPos.xy - vec2(.5)));
+        fac = max(0., fac - screenFacOff);
         vec3 reflection = texture2D(colortex5, screenspaceMarchPos.xy).rgb;
         // if (dot(reflection, vec3(.2126, .7152, .0722)) > .8 && hitSky) fac = 1.;
         reflection *= fac;
         reflection = mix(reflection, skyReflection, (1.-fac) * eyeSkyBrightnessFac);
         result = srcCol + (reflection * waterLayer * waterFresnel * (1. - fogFac));
-        // result = vec3(waterFresnel);
+        // result = vec3(fac);
     }
 
     /* RENDERTARGETS:5 */
