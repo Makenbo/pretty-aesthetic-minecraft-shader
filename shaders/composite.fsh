@@ -23,7 +23,7 @@ const vec3 skyUnderwaterMult = vec3(.3, .7, 1.) * 4.;
 const vec3 sunCol = vec3(.85, 1., .7);
 const vec3 moonCol = vec3(.2, .35, 1.);
 const vec3 overworldAmbient = vec3(0.02, .045, .1) * .5;
-const vec3 undergroundAmbient = vec3(.03, .06, .1) * 1.;
+const vec3 undergroundAmbient = vec3(.03, .06, .1) * .5;
 const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
 const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
 // const vec3 torchCol = vec3(1.) * .7 * 4.;
@@ -312,11 +312,13 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float phongMask, float skyDiffuse)
     // distortFac.z *= .5;
     vec3 texelSize = distortFac;
     texelSize *= 8.;
+    #ifndef VARIABLE_PENUMBRA
+        texelSize.xy = vec2(1.);
+    #endif
 
     // Filter shadows
     // vec3 shadowPass = SampleShadow(shadowSampleCoord, phongMask, .001, 0.);
     vec3 shadowPass = ShadowFilter(shadowSampleCoord, phongMask, skyDiffuse, texelSize);
-    // return texelSize;
     return shadowPass;
 }
 
@@ -341,11 +343,9 @@ float fogify(float x, float w)
 vec3 calcSkyColor(vec3 pos)
 {
 	float upDot = dot(pos, gbufferModelView[1].xyz); //not much, what's up with you?
-    // upDot = pow(upDot, 1.5);
     upDot += smoothstep(.05, .3, upDot) * .5;
     upDot = clamp(upDot, 0., 1.);
 	// return mix(skyColor, fogColor, fogify(max(upDot, 0.0), 0.05));
-	// return mix(vec3(0.), vec3(1.), fogify(max(upDot, 0.0), 0.05));
 	return mix(fogColor, skyColor, upDot);
 }
 
@@ -407,8 +407,9 @@ void main()
     #endif
 
     // Water normals
-    vec3 normalOff = texture2D(colortex9, worldStatic.xz * .02 + frameCounter * .0001).rgb * 2. - 1.;
-    normalTex += normalOff * .01;
+    vec3 normalOff = (texture2D(colortex9, worldStatic.xz * .1 + frameCounter * .0003).rgb * 2. - 1.) * .2;
+    normalOff += texture2D(colortex9, worldStatic.xz * .02 + frameCounter * .0003).rgb * 2. - 1.;
+    normalTex += normalOff * .008;
 
     vec3 normal = normalize(normalTex * 2. - 1.);
 
@@ -505,11 +506,7 @@ void main()
     vec3 waterFogCol = mix(waterTint, waterTint * .2, waterFogFac); // "Light absorption"
 
     vec3 waterCol = albedo;
-    // waterCol = mix(waterCol, waterCol * lightmap.y, 1.) * 1.5;
     waterCol *= waterTint;
-    // waterCol *= lightmap.x + lightmap.y + .5;
-    // waterCol = mix(waterCol, waterCol * (waterPass.rgb * 3.), 1.);
-    // waterCol = mix(waterCol, waterFogCol * .2, waterFogFac); // "Light absorption"
 
     // Calculate fog -------------------------------------------------------
 
@@ -525,10 +522,7 @@ void main()
     sunTintFac *= eyeSkyBrightnessFac;
 
     // Get color
-    // vec3 fogCol = pow(fogColor, vec3(2.2));
-    vec3 fogCol = mix(pow(fogColor, vec3(2.2)), skyPass.rgb, eyeSkyBrightnessFac);
-    // fogCol = mix(fogCol * undergroundFogDim, fogCol, vec3(eyeSkyBrightnessFac) * (1. - isEyeInWater));
-    // fogCol = isEyeInWater == 0 ? fogCol : waterFogCol * .2;
+    vec3 fogCol = mix(pow(fogColor, vec3(2.2)) * .5, skyPass.rgb, eyeSkyBrightnessFac);
     vec3 lightFogCol = mix(moonFogCol, sunFogCol, smoothstep(.5, .8, dayNightFac));
     vec3 screenAddLight = 1. - (1. - fogCol) * (1. - lightFogCol);
     fogCol = mix(fogCol, screenAddLight, sunTintFac);
@@ -553,7 +547,6 @@ void main()
     vec3 skyReflection = pow(calcSkyColor(reflDir), vec3(2.2));
     screenAddLight = 1. - (1. - skyReflection) * (1. - lightFogCol);
     skyReflection = mix(skyReflection, screenAddLight, reflSunTintFac);
-    // col += skyReflection * waterFresnel;
 
     
     // Combine lighting ---------------------------------------------------
@@ -571,12 +564,10 @@ void main()
     // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
 
     // Water fog ------------------------------------------------------
-    // col = mix(col, screenAddLight, sunTintFac * waterMask * fogFac); // Add sun tint
     col = mix(col, col * waterTint * 2., waterMask); // Water blue-ish tint
     col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
     vec3 waterSurfaceCol = desaturate(waterPass.rgb, 1.) * 1.5;
     waterSurfaceCol = max(waterSurfaceCol, 0.);
-    // waterSurfaceCol = waterSurfaceCol * 2.5 + waterPass.rgb * (lightmapCol + sunlight + ambient) * .05;
     waterSurfaceCol += lightmapCol * .7; // Add a bit of underwater light
     col = mix(col, col * waterSurfaceCol, waterMask); // Draw water surface
 
@@ -612,7 +603,8 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(vanillaAO);
-    col = viewLayer(col, texCoord, vec3(waterSurfaceCol));
+    col = viewLayer(col, texCoord, vec3(vanillaAO));
+    // col = vec3(vanillaAO);
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
