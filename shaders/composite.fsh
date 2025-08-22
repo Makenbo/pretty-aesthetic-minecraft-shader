@@ -116,8 +116,11 @@ uniform float nightVision;
 uniform mat4 gbufferProjectionInverse;
 uniform mat4 gbufferModelViewInverse;
 uniform mat4 gbufferModelView;
+uniform mat4 modelViewMatrix;
 uniform mat4 shadowModelView;
+uniform mat4 shadowModelViewInverse;
 uniform mat4 shadowProjection;
+uniform mat4 shadowProjectionInverse;
 
 // Round corners ---------------------------------------------
 
@@ -296,6 +299,23 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
     return result;
 }
 
+// Based on IQ's 2D box SDF
+float iqBoxSDF(vec3 p)
+{
+    vec3 d = abs(p)-vec3(.5);
+    return length(max(d,vec3(0))) + min(max(max(d.x,d.y),d.z),0.0);
+}
+
+vec3 VoxelShadows(vec3 shadowSpaceCoord, float phongMask)
+{
+    float shadowDepth = texture2D(shadowtex0, shadowSpaceCoord.xy, 0.).r;
+    vec3 worldPos = (shadowModelViewInverse * shadowProjectionInverse * vec4(shadowSpaceCoord.xy*2.-1., shadowDepth*2.-1., 1.)).xyz;
+    vec3 voxelPos = floor(worldPos + cameraPosition) + vec3(.5);
+    return vec3(fract(shadowDepth));
+    // return vec3((voxelPosView));
+    // return vec3(occluded ? 0. : 1.);
+}
+
 vec3 ShadowPass(vec4 worldPos, vec3 normal, float phongMask, float skyDiffuse)
 {
     // Get shadow sample coordinates
@@ -317,6 +337,7 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float phongMask, float skyDiffuse)
     #endif
 
     // Filter shadows
+    // vec3 shadowPass = VoxelShadows(shadowSampleCoord, phongMask);
     // vec3 shadowPass = SampleShadow(shadowSampleCoord, phongMask, .001, 0.);
     vec3 shadowPass = ShadowFilter(shadowSampleCoord, phongMask, skyDiffuse, texelSize);
     return shadowPass;
@@ -356,7 +377,7 @@ void main()
     vec2 uv = texCoord;
 
     // Debug view
-    uv = modifyUVs(uv);
+    // uv = modifyUVs(uv);
 
     // Get render passes ----------------------------------------
 
@@ -407,7 +428,8 @@ void main()
     #endif
 
     // Water normals
-    vec3 normalOff = (texture2D(colortex9, worldStatic.xz * .1 + frameCounter * .0003).rgb * 2. - 1.) * .2;
+    vec3 normalOff = (texture2D(colortex9, worldStatic.xz * .1 + frameCounter * .0005).rgb * 2. - 1.) * .3;
+    normalOff += (texture2D(colortex9, worldStatic.xz * 1.5 + frameCounter * .0003).rgb * 2. - 1.) * .3;
     normalOff += texture2D(colortex9, worldStatic.xz * .02 + frameCounter * .0003).rgb * 2. - 1.;
     normalTex += normalOff * .008;
 
@@ -417,10 +439,8 @@ void main()
     worldNormals = normalize(worldNormals);
 
     // Exclude some blocks with weird artifacts
-    vanillaAO = mix(vanillaAO, 1., grass);
-    float leavesFac = mix(0., leaves, smoothstep(10., 100., viewDepth));
-    vanillaAO = mix(vanillaAO, .7, leavesFac);
-    vanillaAO = mix(vanillaAO, 1., waterPass.a * .5);
+    // vanillaAO = mix(vanillaAO, 1., grass);
+    vanillaAO = mix(vanillaAO, 1., waterPass.a * .1);
     // Normalize vanilla AO to not have vanilla sunlight
     float xBias = abs(dot(worldNormals, vec3(1., 0., 0.)));
     float yBias = dot(worldNormals, vec3(0., 1., 0.)) * .5 + .5;
@@ -603,8 +623,8 @@ void main()
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(vanillaAO);
-    col = viewLayer(col, texCoord, vec3(vanillaAO));
-    // col = vec3(vanillaAO);
+    // col = fract(vec3(world.xyz + fract(cameraPosition)));
+    // col = viewLayer(col, texCoord, vec3(fract(diffuse)));
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render

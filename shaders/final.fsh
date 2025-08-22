@@ -29,6 +29,16 @@ uniform sampler2D depthtex2;    // LUT
 
 uniform float nightVision;
 
+/// Overlays -----------------------------------------------
+
+float VignetteMask(vec2 uv)
+{
+    vec2 vignetteUV = uv - vec2(.5);
+    return clamp(pow(1.1 - length(vignetteUV), 2.), 0., 1.);
+}
+
+/// Main --------------------------------------------------
+
 void main()
 {
     vec2 uv = texCoord;
@@ -51,6 +61,10 @@ void main()
 
     // Post --------------------------------------------------------
 
+    // Vignette
+    // col = vec3(VignetteMask(uv));
+    col *= VignetteMask(uv);
+
     // Tonemap (linear to linear)
     col = tonemap(col);
     
@@ -64,7 +78,7 @@ void main()
 
     // Debug -------------------------------------------
 
-    // col = viewLayer(col, texCoord, vec3(lumMask));
+    // col = viewLayer(col, texCoord, vec3(VignetteMask(uv)));
     // col = vec3(lumMask);
 
     /* RENDERTARGETS:0 */
