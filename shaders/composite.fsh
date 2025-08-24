@@ -17,13 +17,13 @@ varying vec2 texCoord;
 const float sunIntensity = 6.;
 const float ambientSunIntensity = 2.5;
 const float moonIntensity = .6;
-const float ambientMoonIntensity = 1.5;
+const float ambientMoonIntensity = 1.;
 const float dimmingAtNoon = .6;
 const vec3 skyUnderwaterMult = vec3(.3, .7, 1.) * 4.;
 const vec3 sunCol = vec3(.85, 1., .7);
 const vec3 moonCol = vec3(.2, .35, 1.);
 const vec3 overworldAmbient = vec3(0.02, .045, .1) * .5;
-const vec3 undergroundAmbient = vec3(.03, .06, .1) * .5;
+const vec3 undergroundAmbient = vec3(.01, .05, .1) * .5;
 const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
 const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
 // const vec3 torchCol = vec3(1.) * .7 * 4.;
@@ -299,29 +299,54 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
     return result;
 }
 
-// Based on IQ's 2D box SDF
-float iqBoxSDF(vec3 p)
+// Taken from lygia github:
+// https://github.com/patriciogonzalezvivo/lygia/blob/main/geometry/aabb/intersect.glsl
+struct AABB
 {
-    vec3 d = abs(p)-vec3(.5);
-    return length(max(d,vec3(0))) + min(max(max(d.x,d.y),d.z),0.0);
+    vec3 min;
+    vec3 max;
+};
+vec2 rayBoxIntersect(const in AABB box, const in vec3 rayOrigin, const in vec3 rayDir)
+{
+    vec3 tMin = (box.min - rayOrigin) / rayDir;
+    vec3 tMax = (box.max - rayOrigin) / rayDir;
+    vec3 t1 = min(tMin, tMax);
+    vec3 t2 = max(tMin, tMax);
+    float tNear = max(max(t1.x, t1.y), t1.z);
+    float tFar = min(min(t2.x, t2.y), t2.z);
+    return vec2(tNear, tFar);
 }
 
-vec3 VoxelShadows(vec3 shadowSpaceCoord, float phongMask)
+vec3 VoxelShadows(vec3 shadowSpaceCoord, vec3 staticWorldSpace, float phongMask)
 {
-    float shadowDepth = texture2D(shadowtex0, shadowSpaceCoord.xy, 0.).r;
+    float shadowTexelSize = (1. / shadowMapResolution) * 1.;
+    float shadowDepth = texture2D(shadowtex0, shadowSpaceCoord.xy).r + .002;
+    shadowDepth = min(shadowDepth, texture2D(shadowtex0, shadowSpaceCoord.xy + vec2(shadowTexelSize, 0.)).r + .002);
+    shadowDepth = min(shadowDepth, texture2D(shadowtex0, shadowSpaceCoord.xy + vec2(-shadowTexelSize, 0.)).r + .002);
+    shadowDepth = min(shadowDepth, texture2D(shadowtex0, shadowSpaceCoord.xy + vec2(0., shadowTexelSize)).r + .002);
+    shadowDepth = min(shadowDepth, texture2D(shadowtex0, shadowSpaceCoord.xy + vec2(0., -shadowTexelSize)).r + .002);
     vec3 worldPos = (shadowModelViewInverse * shadowProjectionInverse * vec4(shadowSpaceCoord.xy*2.-1., shadowDepth*2.-1., 1.)).xyz;
-    vec3 voxelPos = floor(worldPos + cameraPosition) + vec3(.5);
-    return vec3(fract(shadowDepth));
-    // return vec3((voxelPosView));
-    // return vec3(occluded ? 0. : 1.);
+    // vec3 worldPos = (shadowModelViewInverse * shadowProjectionInverse * vec4(shadowSpaceCoord.xy*2.-1., shadowSpaceCoord.z*2.-.9999, 1.)).xyz;
+    vec3 voxelBottomLeft = floor(worldPos + cameraPosition);
+    vec3 voxelTopRight = voxelBottomLeft + vec3(1.);
+    AABB box = AABB(voxelBottomLeft, voxelTopRight);
+    // AABB box = AABB(vec3(0.), vec3(.1));
+    vec3 rayDir = normalize((gbufferModelViewInverse * vec4(shadowLightPosition, 1.)).xyz);
+    vec2 intersections = rayBoxIntersect(box, staticWorldSpace, -rayDir);
+    // float occluded = (intersections.x + intersections.y) / 2.; // Average out the intersection point
+    float occluded = intersections.x; // Average out the intersection point
+    // return vec3(occluded > 0. ? 0. : 1.);
+    float test = rayBoxIntersect(AABB(vec3(1., -1., -1.), vec3(2., 0., 1.)), vec3(0.), vec3(1., 1., 0.)).x;
+    return vec3(test);
 }
 
-vec3 ShadowPass(vec4 worldPos, vec3 normal, float phongMask, float skyDiffuse)
+vec3 ShadowPass(vec3 worldPos, vec3 normal, float phongMask, float skyDiffuse)
 {
     // Get shadow sample coordinates
 
     // Convert screenspace coord to shadow space coord
-    vec4 shadowSpace = shadowProjection * shadowModelView * worldPos;
+    vec4 shadowSpace = shadowProjection * shadowModelView * vec4(worldPos, 1.);
+    shadowSpace.xyz /= shadowSpace.w;
 
     // Get texel size after distortion
     vec3 distortFac = ShadowDistortion(shadowSpace.xyz);
@@ -337,7 +362,7 @@ vec3 ShadowPass(vec4 worldPos, vec3 normal, float phongMask, float skyDiffuse)
     #endif
 
     // Filter shadows
-    // vec3 shadowPass = VoxelShadows(shadowSampleCoord, phongMask);
+    // vec3 shadowPass = VoxelShadows(shadowSampleCoord, worldPos + cameraPosition, phongMask);
     // vec3 shadowPass = SampleShadow(shadowSampleCoord, phongMask, .001, 0.);
     vec3 shadowPass = ShadowFilter(shadowSampleCoord, phongMask, skyDiffuse, texelSize);
     return shadowPass;
@@ -377,12 +402,13 @@ void main()
     vec2 uv = texCoord;
 
     // Debug view
-    // uv = modifyUVs(uv);
+    uv = modifyUVs(uv);
 
     // Get render passes ----------------------------------------
 
     vec4 albedoPass = ToLinear( texture2D(colortex0, uv) );
     vec3 albedo = albedoPass.rgb;
+    // albedo *= .6;
     float vanillaAO = albedoPass.a;
     vec4 vertexCol = ToLinear( texture2D(colortex4, uv) );
     vec3 biomeCol = vertexCol.rgb;
@@ -399,8 +425,8 @@ void main()
     vec3 clipSpace = vec3(uv, depth) * 2. - 1.;
     vec4 viewSpaceHom = gbufferProjectionInverse * vec4(clipSpace, 1.);
     vec3 view = viewSpaceHom.xyz / viewSpaceHom.w;
-    vec4 world = gbufferModelViewInverse * vec4(view, 1.);
-    vec3 worldStatic = world.xyz + cameraPosition;
+    vec3 world = (gbufferModelViewInverse * vec4(view, 1.)).xyz;
+    vec3 worldStatic = world + cameraPosition;
     
     vec3 clipSpaceNoTrans = vec3(uv, depthNoTrans) * 2. - 1.;
     vec4 viewSpaceHomNoTrans = gbufferProjectionInverse * vec4(clipSpaceNoTrans, 1.);
@@ -525,9 +551,6 @@ void main()
     // vec3 waterTint = ((waterFogCol * 1. - .5) * .5 + .75);
     vec3 waterFogCol = mix(waterTint, waterTint * .2, waterFogFac); // "Light absorption"
 
-    vec3 waterCol = albedo;
-    waterCol *= waterTint;
-
     // Calculate fog -------------------------------------------------------
 
     // Height based fog
@@ -615,16 +638,16 @@ void main()
     lumMask *= 4.; // Move gray very roughly closer to the middle gray
     lumMask = ReinhardtTonemap(lumMask); // Compress range, so 8-bit buffer would be enough
     lumMask = 1. - lumMask; // Make mask show the shadows
-    lumMask = pow(lumMask, 10.);
+    lumMask = pow(lumMask, 20.);
     lumMask = max(lumMask, 0.);
 
     // Debug --------------------------------------------------------
 
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
-    // col = vec3(vanillaAO);
-    // col = fract(vec3(world.xyz + fract(cameraPosition)));
-    // col = viewLayer(col, texCoord, vec3(fract(diffuse)));
+    // col = vec3(diffuse);
+    // col = fract(vec3(world + fract(cameraPosition)));
+    col = viewLayer(col, texCoord, vec3(diffuse));
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
