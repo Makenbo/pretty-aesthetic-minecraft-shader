@@ -140,8 +140,8 @@ vec3 BlurRenderPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth,
     for (int i = 0; i < 16; i++)
     {
         // Get randomized poisson offset
-        // vec2 off = rndRot * poissonDisk4x4[i] * DEPTH_BLUR_SCALE * (1. - pow(origDepth, 150.));
-        vec2 off = rndRot * poissonDisk4x4[i] * DEPTH_BLUR_SCALE;
+        // vec2 off = rndRot * poissonDisk16[i] * DEPTH_BLUR_SCALE * (1. - pow(origDepth, 150.));
+        vec2 off = rndRot * poissonDisk16[i] * DEPTH_BLUR_SCALE;
         off /= depthMult;
         off /= vec2(viewWidth, viewHeight);
 
@@ -173,7 +173,7 @@ float BlurAOPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth)
     for (int i = 0; i < 16; i++)
     {
         // Get randomized poisson offset
-        vec2 off = rndRot * poissonDisk4x4[i] * DEPTH_BLUR_SCALE
+        vec2 off = rndRot * poissonDisk16[i] * DEPTH_BLUR_SCALE
                    * (1. - pow(origDepth, 150.));
         off /= vec2(viewWidth, viewHeight);
 
@@ -248,7 +248,7 @@ float ShadowDistance(vec3 pos, mat2 rndRot, float blurMult)
     float shadowDist = 99.;
     for (int i = 0; i < 4; i++)
     {
-        vec2 off = rndRot * poissonDisk2x2[i] * MAX_SHADOW_BLUR * blurMult;
+        vec2 off = rndRot * poissonDisk16[i] * MAX_SHADOW_BLUR * blurMult;
         vec3 sampleCoord = vec3(pos.xy + off, pos.z);
         sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
         shadowDist = min(shadowDist, SampleShadowDist(sampleCoord));   
@@ -263,7 +263,8 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
     float cosAngle = cos(angle);
     float sinAngle = sin(angle);
     mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle)
-                  / (texelSize.x * shadowMapResolution);
+                  / (shadowMapResolution);
+                //   / (texelSize.x * shadowMapResolution);
 
 
     // Calculate distance to the occluder
@@ -280,21 +281,36 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
 
     // Get relative shadow bias
     float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
-    shadowBias *= .0005;
+    shadowBias *= .001;
+    // shadowBias = .001;
 
-    // Sample and filter shadow
+    // Early branching samples
     vec3 result = vec3(0.);
-    for (int i = 0; i < SHADOW_FILTER_SAMPLES; i++)
+    for (int i = 0; i < 4; i++)
     {
-        vec2 off = rndRot * poissonDisk4x4[i] * blurScale;
+        vec2 off = rndRot * earlyOffsets4[i] * blurScale;
         vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
         sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
         result += SampleShadow(sampleCoord, phongDiff, shadowBias, 0.);
     }
-    result /= SHADOW_FILTER_SAMPLES;
+    result /= 4.;
+
+    if (length(result) != 0.) // Skip filtering when we're in the umbra
+    {
+        // Sample and filter shadow
+        for (int i = 0; i < SHADOW_FILTER_SAMPLES; i++)
+        {
+            vec2 off = rndRot * poissonDisk16[i] * blurScale;
+            vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
+            sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
+            result += SampleShadow(sampleCoord, phongDiff, shadowBias, 0.);
+        }
+        result /= SHADOW_FILTER_SAMPLES;
+    }
 
     // return vec3(lod);
     // return vec3(shadowDist);
+    // return length(result) != .0 ? vec3(1.) : vec3(0.);
 
     return result;
 }
@@ -402,7 +418,9 @@ void main()
     vec2 uv = texCoord;
 
     // Debug view
-    uv = modifyUVs(uv);
+    #ifdef SHOW_DEBUG_WINDOW
+        uv = modifyUVs(uv);
+    #endif
 
     // Get render passes ----------------------------------------
 
@@ -590,7 +608,6 @@ void main()
     vec3 skyReflection = pow(calcSkyColor(reflDir), vec3(2.2));
     screenAddLight = 1. - (1. - skyReflection) * (1. - lightFogCol);
     skyReflection = mix(skyReflection, screenAddLight, reflSunTintFac);
-
     
     // Combine lighting ---------------------------------------------------
 
@@ -613,6 +630,14 @@ void main()
     waterSurfaceCol = max(waterSurfaceCol, 0.);
     waterSurfaceCol += lightmapCol * .7; // Add a bit of underwater light
     col = mix(col, col * waterSurfaceCol, waterMask); // Draw water surface
+
+    // Add sky reflection if no SSR --------------------------
+    #ifndef SSR
+    #ifdef SKY_REFLECTIONS
+        float waterFresnel = GetWaterFresnel(view, normal);
+        col += skyReflection * waterPass.a * waterFresnel * eyeSkyBrightnessFac;
+    #endif
+    #endif
 
     // Apply fog -----------------------------------------------------------
     // Darken when bright fog
@@ -640,6 +665,7 @@ void main()
     lumMask = 1. - lumMask; // Make mask show the shadows
     lumMask = pow(lumMask, 20.);
     lumMask = max(lumMask, 0.);
+    lumMask = mix(lumMask, 0., min(leaves + skyMask, 1.)); // Ignore leaves in tonemapping
 
     // Debug --------------------------------------------------------
 
@@ -647,7 +673,9 @@ void main()
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(diffuse);
     // col = fract(vec3(world + fract(cameraPosition)));
-    col = viewLayer(col, texCoord, vec3(diffuse));
+    #ifdef SHOW_DEBUG_WINDOW
+        col = viewLayer(col, texCoord, vec3(0.));
+    #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
@@ -655,5 +683,8 @@ void main()
     gl_FragData[2] = vec4(lumMask, 0., 0., 1.); // Luma mask for local tone mapping
     gl_FragData[3] = vec4(viewDepth, 0., 0., 1.); // Corrected view depth mask
     gl_FragData[4] = vec4(lightmapBlockCol, 1.); // Blocklight objects
-    gl_FragData[5] = vec4(skyReflection, fogFac); // Blocklight objects
+
+    #if defined SKY_REFLECTIONS && defined SSR
+        gl_FragData[5] = vec4(skyReflection, fogFac); // Blocklight objects
+    #endif
 }

@@ -88,7 +88,11 @@ void main()
     bool hitSky = false;
     if (waterLayer > .1)
     {
-        vec3 skyReflection = texture2D(colortex13, uv).rgb;
+        #ifdef SKY_REFLECTIONS
+            vec3 skyReflection = texture2D(colortex13, uv).rgb;
+        #else
+            vec3 skyReflection = vec3(0.);
+        #endif
         float fogFac = texture2D(colortex13, uv).a;
         vec3 dir = normalize(reflect(viewSpace, normal));
         float stepSize = STEP_SIZE_MAG / length(dir.xy);
@@ -116,7 +120,12 @@ void main()
 
             if (i == STEP_AMOUNT-1 && step(1., sampleDepth) > .95 && dir.z < 0.)
             {
-                fac = 0.; // Show sky in reflections
+                #ifdef SKY_REFLECTIONS
+                    fac = 0.; // Show sampled sky in reflections
+                #else
+                    fac = 1.; // Show SSR sky in reflections
+                #endif
+
                 hitSky = true;
                 break;
             }
@@ -126,8 +135,7 @@ void main()
 
 
         /// Combine ----------------------------------------------------
-        float waterFresnel = 1. - abs(dot(normalize(viewSpace), normal));
-        waterFresnel = pow(waterFresnel, 6.);
+        float waterFresnel = GetWaterFresnel(viewSpace, normal);
 
         float edgeFadeout = smoothstep(FADE_OUT_SIZE, .0, screenspaceMarchPos.x) +
                             smoothstep(1. - FADE_OUT_SIZE, 1., screenspaceMarchPos.x);

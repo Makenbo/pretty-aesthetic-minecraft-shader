@@ -1,4 +1,19 @@
-const vec2 poissonDisk2x2[4] = vec2[]
+const vec2 earlyOffsets3[3] = vec2[] // centered triangle
+(
+    vec2( 0., 1. ),
+    vec2( .866025, -.5 ),
+    vec2( -.866025, -.5 )
+);
+
+const vec2 earlyOffsets4[4] = vec2[]
+(
+    vec2( 1., 1. ),
+    vec2( 1., -1. ),
+    vec2( -1., -1. ),
+    vec2( -1., 1. )
+);
+
+const vec2 poissonDisk4[4] = vec2[]
 (
     vec2( -0.94201624, -0.39906216 ),
     vec2( 0.94558609, -0.76890725 ),
@@ -6,7 +21,8 @@ const vec2 poissonDisk2x2[4] = vec2[]
     vec2( 0.34495938, 0.29387760 )
 );
 
-const vec2 poissonDisk4x4[16] = vec2[](
+const vec2 poissonDisk16[16] = vec2[]
+(
     vec2(-0.94201624, -0.39906216),
     vec2( 0.94558609, -0.76890725),
     vec2(-0.094184101, -0.92938870),

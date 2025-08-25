@@ -72,7 +72,9 @@ void main()
     // Post --------------------------------------------------------
 
     // Vignette
-    // col *= VignetteMask(uv);
+    #ifdef VIGNETTE
+        col *= VignetteMask(uv);
+    #endif
 
     // Tonemap (linear to linear)
     col = tonemap(col);
