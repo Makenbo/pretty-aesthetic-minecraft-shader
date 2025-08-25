@@ -282,7 +282,7 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
     // Get relative shadow bias
     float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
     shadowBias *= .001;
-    // shadowBias = .001;
+    shadowBias = .001;
 
     // Early branching samples
     vec3 result = vec3(0.);
@@ -295,7 +295,7 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
     }
     result /= 4.;
 
-    if (length(result) != 0.) // Skip filtering when we're in the umbra
+    if (length(result) > 0. && length(result) < phongDiff) // Skip filtering when we're in the umbra
     {
         // Sample and filter shadow
         for (int i = 0; i < SHADOW_FILTER_SAMPLES; i++)
@@ -310,7 +310,7 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
 
     // return vec3(lod);
     // return vec3(shadowDist);
-    // return length(result) != .0 ? vec3(1.) : vec3(0.);
+    // return vec3(length(result) > 0. && length(result) < phongDiff ? 1. : 0.);
 
     return result;
 }
@@ -461,6 +461,8 @@ void main()
     float grass = mat == 30 || mat == 32 ? 1. : 0.;
     float translucents = leaves + grass;
     float entities = mat == 100 ? 1. : 0.;
+    float waterMask = mat == 20 ? 1. : 0.;
+    // waterMask = mix(waterMask, 1. - waterMask, isEyeInWater);
 
     #ifndef ROUND_BLOCKS
         vec3 normalTex = texture2D(colortex1, uv).rgb;
@@ -532,7 +534,8 @@ void main()
     float skyDiffuse = lightmap.y;
 
         // Sky light
-        lightmap.y = isEyeInWater == 0 ? pow(lightmap.y, 2.) : lightmap.y;
+        // lightmap.y = isEyeInWater == 0 ? pow(lightmap.y, 2.) : lightmap.y;
+        lightmap.y = pow(lightmap.y, 2.);
 
         vec3 skyCol = mix(nightSkyCol, daySkyCol, dayNightFac);
         float ambientIntensity = mix(ambientMoonIntensity, ambientSunIntensity, dayNightFac);
@@ -544,7 +547,9 @@ void main()
     float phongDiffuse = max(dot(normal, shadowLightPosition * .01), 0.);
     float softDiffuse = .8;
     float diffuseMask = mix(phongDiffuse, softDiffuse, translucents); // Grass ignores Phong diffuse
-    vec3 diffuse = ShadowPass(world, normal, diffuseMask, skyDiffuse);
+    vec3 diffuse = vec3(1.);
+    if (waterMask == 0.) // Skip processing shadows on water
+        diffuse = ShadowPass(world, normal, diffuseMask, skyDiffuse);
 
     // Ambient light
     vec3 ambient = mix(undergroundAmbient, overworldAmbient, eyeSkyBrightnessFac);
@@ -552,8 +557,6 @@ void main()
 
     // Water ---------------------------------------------------------
 
-    float waterMask = mat == 20 ? 1. : 0.;
-    // waterMask = min(abs(waterMask), 1.);
     waterMask *= 1. - step(1., depth); // Get rid of some artifacts in the sky
     float waterDepth = isEyeInWater == 0 ?
                        abs(viewDepthNoTrans - viewDepth) * waterMask :
@@ -564,8 +567,7 @@ void main()
     waterFogFac = min(waterFogFac, 1.);
     waterFogFac = mix(waterFogFac, waterFogFac * .5, nightVision);
 
-    vec3 waterTint = isEyeInWater == 1 ? fogColor : biomeCol.rgb;
-    waterTint = desaturate(waterTint, .5) * 1.3;
+    vec3 waterTint = isEyeInWater == 1 ? skyPass.rgb : desaturate(biomeCol.rgb, .5) * 1.3;
     // vec3 waterTint = ((waterFogCol * 1. - .5) * .5 + .75);
     vec3 waterFogCol = mix(waterTint, waterTint * .2, waterFogFac); // "Light absorption"
 
@@ -612,7 +614,7 @@ void main()
     // Combine lighting ---------------------------------------------------
 
     vec3 ambientCol = mix(ambientSunlight, skyCol, vec3(shadowsFac));
-    ambientCol = mix(ambientCol, ambientCol * skyUnderwaterMult, isEyeInWater);
+    // ambientCol = mix(ambientCol, ambientCol * skyUnderwaterMult, isEyeInWater);
     vec3 lightmapCol = lightmap.x * torchCol + lightmap.y * ambientCol;
 
     vec3 lightCol = mix(moonCol * moonIntensity, sunCol * sunIntensity, smoothstep(.5, 1., dayNightFac));
@@ -624,11 +626,10 @@ void main()
     // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
 
     // Water fog ------------------------------------------------------
-    col = mix(col, col * waterTint * 2., waterMask); // Water blue-ish tint
+    col = mix(col, col * waterTint * 2., waterMask * (1.-isEyeInWater)); // Water blue-ish tint
     col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
     vec3 waterSurfaceCol = desaturate(waterPass.rgb, 1.) * 1.5;
-    waterSurfaceCol = max(waterSurfaceCol, 0.);
-    waterSurfaceCol += lightmapCol * .7; // Add a bit of underwater light
+    // waterSurfaceCol += lightmapCol * .7; // Add a bit of underwater light
     col = mix(col, col * waterSurfaceCol, waterMask); // Draw water surface
 
     // Add sky reflection if no SSR --------------------------
@@ -640,10 +641,11 @@ void main()
     #endif
 
     // Apply fog -----------------------------------------------------------
+    float underwaterMult = min((1. - isEyeInWater), 1.);
     // Darken when bright fog
-    col = mix(col, col * .2, vec3(fogFac) * (1. - isEyeInWater) * length(fogColor));
+    col = mix(col, col * .2, vec3(fogFac) * underwaterMult * length(fogColor));
     // Overworld fog
-    col = mix(col, fogCol, vec3(fogFac) * (1. - isEyeInWater));
+    col = mix(col, fogCol, vec3(fogFac) * underwaterMult);
 
     // Sky ----------------------------------------------------------
 
@@ -674,7 +676,7 @@ void main()
     // col = vec3(diffuse);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(0.));
+        col = viewLayer(col, texCoord, vec3(underwaterMult));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

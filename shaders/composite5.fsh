@@ -38,6 +38,7 @@ uniform float viewHeight;
 uniform ivec2 eyeBrightnessSmooth;
 uniform vec3 skyColor;
 uniform vec3 fogColor;
+uniform int isEyeInWater;
 
 /// Constants --------------------------------------------------------
 
@@ -88,10 +89,10 @@ void main()
     bool hitSky = false;
     if (waterLayer > .1)
     {
+        vec3 skyReflection = vec3(0.);
         #ifdef SKY_REFLECTIONS
-            vec3 skyReflection = texture2D(colortex13, uv).rgb;
-        #else
-            vec3 skyReflection = vec3(0.);
+            if (isEyeInWater == 0)
+                skyReflection = texture2D(colortex13, uv).rgb;
         #endif
         float fogFac = texture2D(colortex13, uv).a;
         vec3 dir = normalize(reflect(viewSpace, normal));
