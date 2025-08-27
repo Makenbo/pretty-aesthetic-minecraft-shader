@@ -4,9 +4,14 @@
 varying vec2 texCoord;
 varying vec4 color;
 
+uniform mat4 projectionMatrix;
+uniform mat4 modelViewMatrix;
+uniform mat4 gbufferProjection;
+uniform mat4 gbufferModelView;
+
 void main()
 {
-    gl_Position = ftransform();
+    gl_Position = projectionMatrix * modelViewMatrix * gl_Vertex;
     vec3 distortFac = ShadowDistortion(gl_Position.xyz); 
     gl_Position.xyz /= distortFac;
 

@@ -25,6 +25,12 @@ vec3 desaturate(vec3 col, float fac)
     return mix(col, vec3(lum), fac);
 }
 
+// Stolen from RRE36
+float ditherGradNoise()
+{
+    return fract(52.9829189*fract(0.06711056*gl_FragCoord.x + 0.00583715*gl_FragCoord.y));
+}
+
 // Water --------------------------------------------------------------------------------
 
 float GetWaterFresnel(vec3 viewSpace, vec3 normal)
