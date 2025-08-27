@@ -42,10 +42,7 @@ const vec3 moonFogCol = vec3(.2, .35, .7) * .5;
 const float undergroundFogDim = .2;
 
 // Shadows
-#define SHADOW_SAMPLES 2
 #define MAX_SHADOW_BLUR 5.
-const int shadowSampleWidth = 2 * SHADOW_SAMPLES + 1;
-const int totalSamples = shadowSampleWidth * shadowSampleWidth;
 
 // Ambient occlusion
 const float ambientOcclusionLevel = 1.;
@@ -69,6 +66,7 @@ uniform sampler2D colortex3;    // blocks ids
 uniform sampler2D colortex4;    // vertex color (biome color)
 uniform sampler2D colortex11;   // water layer
 uniform sampler2D colortex12;   // sky layer
+uniform sampler2D colortex14;   // VSM shadow layer
 
 /*
 const int colortex0Format = RGBA8;
@@ -78,7 +76,9 @@ const int colortex3Format = R16;
 const int colortex4Format = RGBA8;
 const int colortex11Format = RGBA8;
 const int colortex12Format = RGBA16;
+const int colortex14Format = RGB16F;
 */
+
 
 uniform sampler2D depthtex2;    // LUT
 uniform sampler2D colortex9;    // Perlin Noise
@@ -551,8 +551,13 @@ void main()
     float diffuseMask = mix(phongDiffuse, softDiffuse, translucents); // Grass ignores Phong diffuse
     vec3 diffuse = vec3(1.);
     // if (diffuseMask > 0. && waterMask == 0.) // Skip processing shadows on water
-        diffuse = ShadowPass(world, normal, diffuseMask, skyDiffuse);
+        // diffuse = ShadowPass(world, normal, diffuseMask, skyDiffuse);
     // else diffuse = vec3(diffuseMask);
+
+    vec3 shadowView = (shadowModelView * vec4(world, 1.)).xyz;
+    vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView) * .5 + .5;
+    vec3 vsmShadow = texture2D(colortex14, shadowSpace.xy).rgb;
+    diffuse = vsmShadow;
 
     // Ambient light
     vec3 ambient = mix(undergroundAmbient, overworldAmbient, eyeSkyBrightnessFac);
@@ -679,7 +684,7 @@ void main()
     // col = vec3(diffuse);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(texture2D(shadowtex0, uv).rrr));
+        col = viewLayer(col, texCoord, vec3(vsmShadow));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
