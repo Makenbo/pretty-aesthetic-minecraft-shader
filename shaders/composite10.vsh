@@ -1,6 +1,6 @@
-#version 420
+#version 120
 
-out vec2 texCoord;
+varying vec2 texCoord;
 
 void main()
 {

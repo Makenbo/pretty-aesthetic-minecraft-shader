@@ -2,14 +2,14 @@
     Post blurring - downscale
 */
 
-#version 420
+#version 120
 
 #include "shader_settings.glsl"
 #include "util/post_col.glsl"
 
 /// Attributes -------------------------------------------------------
 
-in vec2 texCoord;
+varying vec2 texCoord;
 
 /// Custom textures -----------------------------------------------
 

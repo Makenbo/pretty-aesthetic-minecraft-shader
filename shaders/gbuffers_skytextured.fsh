@@ -1,9 +1,9 @@
-#version 420
+#version 120
 
 // Attributes
 
-in vec4 color;
-in vec2 texCoords;
+varying vec4 color;
+varying vec2 texCoords;
 
 // Uniforms
 

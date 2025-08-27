@@ -2,14 +2,14 @@
     Screenspace reflections
 */
 
-#version 420
+#version 120
 
 #include "util/functions.glsl"
 #include "shader_settings.glsl"
 
 /// Attributes -------------------------------------------------------
 
-in vec2 texCoord;
+varying vec2 texCoord;
 
 /// Buffers -----------------------------------------------
 

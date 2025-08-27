@@ -42,8 +42,8 @@ const vec2 poissonDisk16[16] = vec2[]
 );
 
 //Pre-computed Gaussian 9 weights (sigma 5), renormalized to sum to 1
-float gauss9[9] =
-{
+float gauss9[9] = float[]
+(
     0.080497596,
     0.078903637,
     0.074308647,
@@ -53,15 +53,15 @@ float gauss9[9] =
     0.039182387,
     0.030211641,
     0.022381334
-};
+);
 
-const float gauss7[7] = 
-{
+const float gauss7[7] = float[]
+(
     0.064759,
     0.120985,
     0.176033,
     0.199471,
     0.176033,
     0.120985,
-    0.064759,
-};
+    0.064759
+);

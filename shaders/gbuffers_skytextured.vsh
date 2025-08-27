@@ -1,7 +1,7 @@
-#version 420
+#version 120
 
-out vec4 color;
-out vec2 texCoords;
+varying vec4 color;
+varying vec2 texCoords;
 
 void main()
 {

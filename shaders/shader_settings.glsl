@@ -1,5 +1,6 @@
 // Shadows
 
+#define SHADOW_MAPPING // Dynamic shadows from the sun. Disabling this will make all other shadow options irrelevant.
 #define VARIABLE_PENUMBRA // Shadows are softer the further they are
 #define SHADOW_FILTER_SAMPLES 16 // [4 6 8 12 16] Determines noisiness of blurred shadows
 

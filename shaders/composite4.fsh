@@ -1,4 +1,4 @@
-#version 420
+#version 120
 #include "distort.glsl"
 #include "shader_settings.glsl"
 #include "util/functions.glsl"
@@ -15,14 +15,14 @@ varying vec2 texCoord;
 
 // Lighting
 const float sunIntensity = 6.;
-const float ambientSunIntensity = 2.5;
+const float ambientSunIntensity = 2.;
 const float moonIntensity = .6;
 const float ambientMoonIntensity = 1.;
 const float dimmingAtNoon = .6;
 const vec3 skyUnderwaterMult = vec3(.3, .7, 1.) * 4.;
 const vec3 sunCol = vec3(.85, 1., .7);
 const vec3 moonCol = vec3(.2, .35, 1.);
-const vec3 overworldAmbient = vec3(0.02, .045, .1) * .5;
+const vec3 overworldAmbient = vec3(0.02, .045, .1) * .0;
 const vec3 undergroundAmbient = vec3(.03, .05, .08) * .7;
 const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
 const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
@@ -199,9 +199,7 @@ float GetShadowMask(in sampler2D shadowTex, vec3 shadowSpaceCoord, float bias)
     float shadowSample = texture2D(shadowTex, shadowSpaceCoord.xy, 0.).r;
     // float shadowSample = textureLod(shadowTex, shadowSpaceCoord.xy, lod).r;
 
-    return smoothstep(  shadowSpaceCoord.z - bias,
-                        shadowSpaceCoord.z - bias,
-                        shadowSample);
+    return step(shadowSpaceCoord.z - bias, shadowSample);
 }
 
 vec3 SampleShadow(in vec3 sampleCoord, float bias, float colorFac)
@@ -256,7 +254,7 @@ float ShadowDistance(vec3 pos, mat2 rndRot, float blurMult)
     return shadowDist;
 }
 
-vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texelSize)
+vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 texelSize)
 {
     // Randomize angle of sample offset
     float angle = texture2D(noisetex, texCoord * 20.).r * 6.28 * frameCounter;
@@ -272,8 +270,7 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float skyDiffuse, vec3 texe
     float blurScale = 1.;
 
     #ifdef VARIABLE_PENUMBRA
-        float shadowDist = ShadowDistance(shadowCoord, rndRot, 6. * texelSize.x);
-
+        float shadowDist = ShadowDistance(shadowCoord, rndRot, 1.);
         blurScale = (1. - shadowDist) * 6. + 1.;
         blurScale = min(blurScale, MAX_SHADOW_BLUR);
         // float blurScale = 1.;
@@ -358,7 +355,7 @@ vec3 VoxelShadows(vec3 shadowSpaceCoord, vec3 staticWorldSpace, float phongMask)
     return vec3(test);
 }
 
-vec3 ShadowPass(vec3 worldPos, vec3 normal, float phongMask, float skyDiffuse)
+vec3 ShadowPass(vec3 worldPos, vec3 normal, float phongMask, float translucents)
 {
     // Get shadow sample coordinates
 
@@ -381,7 +378,7 @@ vec3 ShadowPass(vec3 worldPos, vec3 normal, float phongMask, float skyDiffuse)
     // Filter shadows
     // vec3 shadowPass = VoxelShadows(shadowSampleCoord, worldPos + cameraPosition, phongMask);
     // vec3 shadowPass = SampleShadow(shadowSampleCoord, .001, 0.);
-    vec3 shadowPass = ShadowFilter(shadowSampleCoord, phongMask, skyDiffuse, texelSize);
+    vec3 shadowPass = ShadowFilter(shadowSampleCoord, phongMask, translucents, texelSize);
 
     return min(shadowPass, vec3(phongMask));
 }
@@ -476,10 +473,14 @@ void main()
     #endif
 
     // Water normals
-    vec3 normalOff = (texture2D(colortex9, worldStatic.xz * .1 + frameCounter * .0005).rgb * 2. - 1.) * .3;
-    normalOff += (texture2D(colortex9, worldStatic.xz * 1.5 + frameCounter * .0003).rgb * 2. - 1.) * .3;
-    normalOff += texture2D(colortex9, worldStatic.xz * .02 + frameCounter * .0003).rgb * 2. - 1.;
-    normalTex += normalOff * .008;
+    vec3 normalOff = vec3(0.);
+    if (waterPass.a > 0.)
+    {
+        normalOff += (texture2D(colortex9, worldStatic.xz * .1 + frameCounter * .0005).rgb * 2. - 1.) * .3;
+        normalOff += (texture2D(colortex9, worldStatic.xz * 1.5 + frameCounter * .0003).rgb * 2. - 1.) * .3;
+        normalOff += texture2D(colortex9, worldStatic.xz * .02 + frameCounter * .0003).rgb * 2. - 1.;
+        normalTex += normalOff * .008;
+    }
 
     vec3 normal = normalize(normalTex * 2. - 1.);
 
@@ -523,9 +524,13 @@ void main()
     
     float lightSourceTransitionMask = 1. - (2. * abs(dayNightFac - .5));
     shadowsFac *= 1. - lightSourceTransitionMask;
-    shadowsFac = mix(shadowsFac, 0., noonDimFac * .6);
+    shadowsFac = mix(shadowsFac, 0., noonDimFac * .4);
     shadowsFac = max(shadowsFac - (float(isEyeInWater) * 1.), 0.);
     // shadowsFac = max(shadowsFac - waterPass.a, 0.);
+
+    #ifndef SHADOW_MAPPING
+        shadowsFac = 0.;
+    #endif
 
     // Fake light color
     float warmLightSrc = mat == 25 || mat == 26 ? 1. : 0.;
@@ -550,14 +555,16 @@ void main()
     float softDiffuse = .8;
     float diffuseMask = mix(phongDiffuse, softDiffuse, translucents); // Grass ignores Phong diffuse
     vec3 diffuse = vec3(1.);
-    // if (diffuseMask > 0. && waterMask == 0.) // Skip processing shadows on water
-        // diffuse = ShadowPass(world, normal, diffuseMask, skyDiffuse);
-    // else diffuse = vec3(diffuseMask);
+    #ifdef SHADOW_MAPPING
+        if (diffuseMask > 0. && waterMask == 0.) // Skip processing shadows on water
+            diffuse = ShadowPass(world, normal, skyDiffuse, translucents);
+        else diffuse = vec3(diffuseMask);
+    #endif
 
-    vec3 shadowView = (shadowModelView * vec4(world, 1.)).xyz;
-    vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView) * .5 + .5;
-    vec3 vsmShadow = texture2D(colortex14, shadowSpace.xy).rgb;
-    diffuse = vsmShadow;
+    // vec3 shadowView = (shadowModelView * vec4(world, 1.)).xyz;
+    // vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView) * .5 + .5;
+    // vec3 vsmShadow = texture2D(colortex14, shadowSpace.xy).rgb;
+    // diffuse = vsmShadow;
 
     // Ambient light
     vec3 ambient = mix(undergroundAmbient, overworldAmbient, eyeSkyBrightnessFac);
@@ -578,6 +585,10 @@ void main()
     vec3 waterTint = isEyeInWater == 1 ? skyPass.rgb : desaturate(biomeCol.rgb, .5) * 1.3;
     // vec3 waterTint = ((waterFogCol * 1. - .5) * .5 + .75);
     vec3 waterFogCol = mix(waterTint, waterTint * .2, waterFogFac); // "Light absorption"
+
+    // Water edge
+    // float waterEdge = waterDepth < 1. ?  1. : 0.;
+    // waterEdge *= waterPass.a;
 
     // Calculate fog -------------------------------------------------------
 
@@ -610,7 +621,7 @@ void main()
 
     shadowsFac *= smoothstep(.4, .0, fogFac); // "diffuse" shadows in fog
 
-    // Sky water reflection
+    // Sky reflection
     vec3 reflDir = normalize(reflect(view, normal));
     float reflSunTintFac = GetSunTintFac(reflDir);
     reflSunTintFac *= 1. - lightSourceTransitionMask;
@@ -618,6 +629,14 @@ void main()
     vec3 skyReflection = pow(calcSkyColor(reflDir), vec3(2.2));
     screenAddLight = 1. - (1. - skyReflection) * (1. - lightFogCol);
     skyReflection = mix(skyReflection, screenAddLight, reflSunTintFac);
+
+    // Sky environment
+    // reflSunTintFac = GetSunTintFac(normal);
+    // reflSunTintFac *= 1. - lightSourceTransitionMask;
+    // reflSunTintFac *= eyeSkyBrightnessFac;
+    // vec3 skyDiffuseRefl = pow(calcSkyColor(normal), vec3(2.2));
+    // screenAddLight = 1. - (1. - skyDiffuseRefl) * (1. - lightFogCol);
+    // skyDiffuseRefl = mix(skyDiffuseRefl, screenAddLight, reflSunTintFac);
     
     // Combine lighting ---------------------------------------------------
 
@@ -641,12 +660,17 @@ void main()
     col = mix(col, col * waterSurfaceCol, waterMask); // Draw water surface
 
     // Add sky reflection if no SSR --------------------------
+    float fresnel = GetWaterFresnel(view, normal);
     #ifndef SSR
     #ifdef SKY_REFLECTIONS
-        float waterFresnel = GetWaterFresnel(view, normal);
-        col += skyReflection * waterPass.a * waterFresnel * eyeSkyBrightnessFac;
+        col += skyReflection * waterPass.a * fresnel * eyeSkyBrightnessFac;
     #endif
     #endif
+
+    // Subtle block reflections at night
+    // col += skyReflection * (1.-waterPass.a) * fresnel * eyeSkyBrightnessFac * lightSourceTransitionMask * 1.;
+    // col += skyDiffuseRefl * (1.-waterPass.a) * eyeSkyBrightnessFac * .05;
+
 
     // Apply fog -----------------------------------------------------------
     float underwaterMult = min((1. - isEyeInWater), 1.);
@@ -684,7 +708,7 @@ void main()
     // col = vec3(diffuse);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(vsmShadow));
+        col = viewLayer(col, texCoord, vec3(diffuse));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

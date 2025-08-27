@@ -65,8 +65,8 @@ vec3 LookupColor(sampler2D lookupTable, vec3 color)
     int i0 = int(color.b);
     int i1 = i0 + 1;
 
-    vec2 c0 = vec2(i0 % lutTile.x, i0 / lutTile.x);
-    vec2 c1 = vec2(i1 % lutTile.x, i1 / lutTile.x);
+    vec2 c0 = vec2(mod(i0, lutTile.x), i0 / lutTile.x);
+    vec2 c1 = vec2(mod(i1, lutTile.x), i1 / lutTile.x);
 
     vec2 rgUV = color.rg * ((lutSize - 1.0) / (lutSize * lutTile)) + (0.5 / (lutSize * lutTile));
 

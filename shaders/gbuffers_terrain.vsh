@@ -1,14 +1,14 @@
-#version 420
+#version 120
 
 // Attributes
 
-in vec2 mc_Entity;
+varying vec2 mc_Entity;
 
-out vec2 texCoords;
-out vec3 normal;
-out vec4 color;
-out vec2 entityID;
-out vec2 lightmapCoords;
+varying vec2 texCoords;
+varying vec3 normal;
+varying vec4 color;
+varying vec2 entityID;
+varying vec2 lightmapCoords;
 
 // Uniforms
 

@@ -1,4 +1,4 @@
-#version 420
+#version 120
 
 #include "shader_settings.glsl"
 #include "util/post_col.glsl"
@@ -11,7 +11,7 @@
 
 /// Attributes -------------------------------------------------------
 
-in vec2 texCoord;
+varying vec2 texCoord;
 
 /// Custom textures -----------------------------------------------
 
@@ -61,7 +61,7 @@ void main()
 
         // Ignore leaves
         float entityID = texture2D(colortex3, uv).r;
-        int mat = int(entityID.x * 10000. + .5);
+        int mat = int(entityID * 10000. + .5);
         float leaves = mat == 31 ? 1. : 0.;
         lumMask *= 1. - leaves;
 

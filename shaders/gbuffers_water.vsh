@@ -1,12 +1,12 @@
-#version 420
+#version 120
 
-in vec2 mc_Entity;
+varying vec2 mc_Entity;
 
-out vec2 texCoords;
-out vec4 color;
-out vec3 normal;
-out vec2 lightmapCoords;
-out vec2 entityID;
+varying vec2 texCoords;
+varying vec4 color;
+varying vec3 normal;
+varying vec2 lightmapCoords;
+varying vec2 entityID;
 
 void main()
 {

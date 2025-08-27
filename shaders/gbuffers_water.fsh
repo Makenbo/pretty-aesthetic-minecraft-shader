@@ -1,12 +1,12 @@
-#version 420
+#version 120
 
 // Attributes
 
-in vec4 color;
-in vec2 texCoords;
-in vec3 normal;
-in vec2 lightmapCoords;
-in vec2 entityID;
+varying vec4 color;
+varying vec2 texCoords;
+varying vec3 normal;
+varying vec2 lightmapCoords;
+varying vec2 entityID;
 
 uniform sampler2D texture;  // The texture atlas
 uniform sampler2D lightmap;

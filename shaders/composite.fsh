@@ -1,4 +1,4 @@
-#version 420
+#version 120
 #include "distort.glsl"
 #include "shader_settings.glsl"
 #include "util/functions.glsl"
