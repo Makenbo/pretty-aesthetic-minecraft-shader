@@ -77,7 +77,9 @@ void main()
     #endif
 
     // Tonemap (linear to linear)
-    col = tonemap(col);
+    #ifdef TONEMAPPING
+        col = tonemap(col);
+    #endif
     
     // Gamma correction (linear to gamma 2.2)
     col = ToDisplay(col);

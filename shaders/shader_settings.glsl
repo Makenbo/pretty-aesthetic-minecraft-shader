@@ -1,6 +1,6 @@
 // Shadows
 
-#define SHADOW_MAPPING // Dynamic shadows from the sun. Disabling this will make all other shadow options irrelevant.
+#define SHADOW_MAPPING // Dynamic shadows from the sun. Very big performance impact. Disabling this will make all other shadow options irrelevant. This option can't be disabled in OptiFine.
 #define VARIABLE_PENUMBRA // Shadows are softer the further they are
 #define SHADOW_FILTER_SAMPLES 16 // [4 6 8 12 16] Determines noisiness of blurred shadows
 
@@ -19,3 +19,4 @@
 // Debug
 
 #define SHOW_DEBUG_WINDOW
+#define TONEMAPPING

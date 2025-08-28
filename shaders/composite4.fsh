@@ -21,8 +21,9 @@ const float ambientMoonIntensity = 1.;
 const float dimmingAtNoon = .6;
 const vec3 skyUnderwaterMult = vec3(.3, .7, 1.) * 4.;
 const vec3 sunCol = vec3(.85, 1., .7);
+// const vec3 sunCol = vec3(1.);
 const vec3 moonCol = vec3(.2, .35, 1.);
-const vec3 overworldAmbient = vec3(0.02, .045, .1) * .0;
+const vec3 overworldAmbient = vec3(0.02, .045, .1) * .3;
 const vec3 undergroundAmbient = vec3(.03, .05, .08) * .7;
 const vec3 daySkyCol = vec3(.09, .18, .25) * 4.;
 const vec3 nightSkyCol = vec3(.09, .18, .25) * .3;
@@ -51,6 +52,10 @@ const float ambientOcclusionLevel = 1.;
 #define NIGHT_VISION_AMBIENT_MULT 1.5
 #define NIGHT_VISION_FOG_DENSITY_INV 7.
 
+// Water and ice
+#define ICE_DEPTH_COL vec3(.3, .5, 1.) * .6  // Ice doesn't have biome color, so just come up
+                                            // with something for the fog
+
 // Modifiable variables
 const int shadowMapResolution = 2560; // [512 1024 1536 2048 2560 3072 4096]
 const int noiseTextureResolution = 128;
@@ -76,7 +81,7 @@ const int colortex3Format = R16;
 const int colortex4Format = RGBA8;
 const int colortex11Format = RGBA8;
 const int colortex12Format = RGBA16;
-const int colortex14Format = RGB16F;
+const int colortex14Format = RGB8;
 */
 
 
@@ -192,6 +197,18 @@ float BlurAOPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth)
     return outCol / weight;
 }
 
+void normalizeVanillaAO(inout float vanillaAO, vec3 worldNormals, float opaqueObjects)
+{
+    float xBias = abs(dot(worldNormals, vec3(1., 0., 0.)));
+    float yBias = dot(worldNormals, vec3(0., 1., 0.)) * .5 + .5;
+    float zBias = abs(dot(worldNormals, vec3(0., 0., 1.)));
+    vanillaAO = mix(vanillaAO, vanillaAO * .32, step(.8, yBias) * opaqueObjects);
+    vanillaAO = mix(vanillaAO, vanillaAO * 1.5, step(yBias, .2) * opaqueObjects);
+    vanillaAO = mix(vanillaAO, vanillaAO * .53, zBias * opaqueObjects);
+    vanillaAO = mix(vanillaAO, vanillaAO * 3., opaqueObjects * .9);
+    vanillaAO = clamp(vanillaAO, 0., 1.);
+}
+
 /// Shadows ----------------------------------------------
 
 float GetShadowMask(in sampler2D shadowTex, vec3 shadowSpaceCoord, float bias)
@@ -267,7 +284,7 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 te
 
 
     // Calculate distance to the occluder
-    float blurScale = 1.;
+    float blurScale = 2.;
 
     #ifdef VARIABLE_PENUMBRA
         float shadowDist = ShadowDistance(shadowCoord, rndRot, 1.);
@@ -279,7 +296,7 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 te
 
     // Get relative shadow bias
     float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
-    shadowBias *= .0005;
+    shadowBias *= .001;
     // shadowBias = .001;
 
     // Early branching samples
@@ -425,10 +442,10 @@ void main()
 
     vec4 albedoPass = ToLinear( texture2D(colortex0, uv) );
     vec3 albedo = albedoPass.rgb;
-    // albedo *= .6;
-    float vanillaAO = albedoPass.a;
+
     vec4 vertexCol = ToLinear( texture2D(colortex4, uv) );
     vec3 biomeCol = vertexCol.rgb;
+    float vanillaAO = vertexCol.a;
 
     float depth = texture2D(depthtex0, uv).r;
     float depthNoTrans = texture2D(depthtex1, uv).r;
@@ -461,6 +478,9 @@ void main()
     float translucents = leaves + grass;
     float entities = mat == 100 ? 1. : 0.;
     float waterMask = mat == 20 ? 1. : 0.;
+    float iceMask = mat == 21 ? 1. : 0.;
+    biomeCol = mix(biomeCol, waterPass.rgb * ICE_DEPTH_COL, iceMask);
+    float waterAndIce = waterMask + iceMask;
     // waterMask = mix(waterMask, 1. - waterMask, isEyeInWater);
 
     #ifndef ROUND_BLOCKS
@@ -488,18 +508,11 @@ void main()
     worldNormals = normalize(worldNormals);
 
     // Exclude some blocks with weird artifacts
-    // vanillaAO = mix(vanillaAO, 1., grass);
-    vanillaAO = mix(vanillaAO, 1., waterPass.a * .1);
-    // Normalize vanilla AO to not have vanilla sunlight
-    float xBias = abs(dot(worldNormals, vec3(1., 0., 0.)));
-    float yBias = dot(worldNormals, vec3(0., 1., 0.)) * .5 + .5;
-    float zBias = abs(dot(worldNormals, vec3(0., 0., 1.)));
-    float opaqueObjects = 1. - min(grass + waterPass.a + entities, 1.);
-    vanillaAO = mix(vanillaAO, vanillaAO * .32, step(.8, yBias) * opaqueObjects);
-    vanillaAO = mix(vanillaAO, vanillaAO * 1.5, step(yBias, .2) * opaqueObjects);
-    vanillaAO = mix(vanillaAO, vanillaAO * .53, zBias * opaqueObjects);
-    vanillaAO = mix(vanillaAO, vanillaAO * 3., 1. - (grass + entities) * .9);
-    vanillaAO = clamp(vanillaAO, 0., 1.);
+    vanillaAO = mix(vanillaAO, 1., waterPass.a * .1); // Tone down AO under water
+
+    // Normalize vanilla AO to not have vanilla sunlight (not needed in Iris)
+        // float opaqueObjects = 1. - min(grass + waterPass.a + entities, 1.);
+        // normalizeVanillaAO(vanillaAO, worldNormals, opaqueObjects);
 
     // Eye brightness
     float eyeSkyBrightnessFac = float(eyeBrightnessSmooth.y) / 240.;
@@ -574,7 +587,7 @@ void main()
 
     waterMask *= 1. - step(1., depth); // Get rid of some artifacts in the sky
     float waterDepth = isEyeInWater == 0 ?
-                       abs(viewDepthNoTrans - viewDepth) * waterMask :
+                       abs(viewDepthNoTrans - viewDepth) * waterAndIce :
                        viewDepth;
 
     float waterFogFac = pow(waterDepth, 1.) * .1;
@@ -582,13 +595,9 @@ void main()
     waterFogFac = min(waterFogFac, 1.);
     waterFogFac = mix(waterFogFac, waterFogFac * .5, nightVision);
 
-    vec3 waterTint = isEyeInWater == 1 ? skyPass.rgb : desaturate(biomeCol.rgb, .5) * 1.3;
+    vec3 waterTint = isEyeInWater == 1 ? skyPass.rgb : desaturate(biomeCol, .5) * 1.3;
     // vec3 waterTint = ((waterFogCol * 1. - .5) * .5 + .75);
     vec3 waterFogCol = mix(waterTint, waterTint * .2, waterFogFac); // "Light absorption"
-
-    // Water edge
-    // float waterEdge = waterDepth < 1. ?  1. : 0.;
-    // waterEdge *= waterPass.a;
 
     // Calculate fog -------------------------------------------------------
 
@@ -612,9 +621,9 @@ void main()
 
     // Get factor
     float fogDepth = viewDepth / far;
-    float underwaterFogDepth = (viewDepthNoTrans - viewDepth) / far; // To get smoother fog transition on water surface
+    float underwaterFogDepth = (viewDepthNoTrans - viewDepth) / far; // To get smoother fog transition on water surface (unneccessary in OptiFine I think)
     float densityInv = mix(FOG_DENSITY_INV, NIGHT_VISION_FOG_DENSITY_INV, nightVision);
-    float fogFac = pow(fogDepth + underwaterFogDepth*.2, densityInv);
+    float fogFac = pow(fogDepth + underwaterFogDepth*0., densityInv);
     fogFac = mix(fogFac, fogDepth * 2., fogHeightMult * fogLuma * (1. - nightVision*.9));
     fogFac = ReinhardtTonemap(fogFac * 4.) * 1.25;
     fogFac = min(fogFac, 1.);
@@ -653,11 +662,15 @@ void main()
     // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
 
     // Water fog ------------------------------------------------------
-    col = mix(col, col * waterTint * 2., waterMask * (1.-isEyeInWater)); // Water blue-ish tint
+    col = mix(col, col * waterTint * 2., waterAndIce * (1.-isEyeInWater)); // Water blue-ish tint
     col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
-    vec3 waterSurfaceCol = desaturate(waterPass.rgb, 1.) * 1.5;
+    vec3 waterSurfaceCol = waterPass.rgb;
+    waterSurfaceCol = mix(waterSurfaceCol, desaturate(waterSurfaceCol, 1.) * 1.5, waterMask);
+    waterSurfaceCol = mix(waterSurfaceCol, desaturate(max(waterSurfaceCol * 2. - .5, 0.), 0.), iceMask); // Brighten up ice
     // waterSurfaceCol += lightmapCol * .7; // Add a bit of underwater light
-    col = mix(col, col * waterSurfaceCol, waterMask); // Draw water surface
+    col = mix(col, col * waterSurfaceCol, waterAndIce); // Draw water surface
+    vec3 additiveSurfaceCol = waterPass.rgb;
+    col = mix(col, col + additiveSurfaceCol * .02, iceMask); // Draw water surface
 
     // Add sky reflection if no SSR --------------------------
     float fresnel = GetWaterFresnel(view, normal);
@@ -708,7 +721,7 @@ void main()
     // col = vec3(diffuse);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(diffuse));
+        col = viewLayer(col, texCoord, vec3(fresnel));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
@@ -719,6 +732,6 @@ void main()
     gl_FragData[4] = vec4(lightmapBlockCol, 1.); // Blocklight objects
 
     #if defined SKY_REFLECTIONS && defined SSR
-        gl_FragData[5] = vec4(skyReflection, fogFac); // Blocklight objects
+        gl_FragData[5] = vec4(skyReflection, fogFac) * waterAndIce; // Sky reflections for SSR
     #endif
 }
