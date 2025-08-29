@@ -38,11 +38,12 @@ const vec3 warmLightSrcCol = vec3(1., .7, .2);
 
 // Fog
 #define FOG_DENSITY_INV 4.
-const vec3 sunFogCol = vec3(1.5, 1., 0.) * 2.5;
+const vec3 sunFogCol = vec3(1.5, 1., 0.) * 1.;
 const vec3 moonFogCol = vec3(.2, .35, .7) * .5;
 const float undergroundFogDim = .2;
 
 // Shadows
+#define NORMAL_BIAS .08
 #define MAX_SHADOW_BLUR 5.
 
 // Ambient occlusion
@@ -211,19 +212,19 @@ void normalizeVanillaAO(inout float vanillaAO, vec3 worldNormals, float opaqueOb
 
 /// Shadows ----------------------------------------------
 
-float GetShadowMask(in sampler2D shadowTex, vec3 shadowSpaceCoord, float bias)
+float GetShadowMask(in sampler2D shadowTex, vec3 shadowSpaceCoord)
 {
-    float shadowSample = texture2D(shadowTex, shadowSpaceCoord.xy, 0.).r;
+    float shadowSample = texture2D(shadowTex, shadowSpaceCoord.xy).r;
     // float shadowSample = textureLod(shadowTex, shadowSpaceCoord.xy, lod).r;
 
-    return step(shadowSpaceCoord.z - bias, shadowSample);
+    return step(shadowSpaceCoord.z, shadowSample);
 }
 
-vec3 SampleShadow(in vec3 sampleCoord, float bias, float colorFac)
+vec3 SampleShadow(in vec3 sampleCoord)
 {
     // Shadow masks
-    float shadow =         GetShadowMask(shadowtex0, sampleCoord, bias);
-    float shadowNoTransp = GetShadowMask(shadowtex1, sampleCoord, bias);
+    float shadow =         GetShadowMask(shadowtex0, sampleCoord);
+    float shadowNoTransp = GetShadowMask(shadowtex1, sampleCoord);
     float transparentObjects = shadowNoTransp - shadow;
 
     if (transparentObjects < .1) return vec3(shadow); // Early return for opaque objects
@@ -295,23 +296,23 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 te
     #endif
 
     // Get relative shadow bias
-    float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
-    shadowBias *= .001;
-    // shadowBias = .001;
+    // float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
+    // shadowBias *= .001;
+    float shadowBias = .001;
 
     // Early branching samples
     vec3 result = vec3(0.);
-    result += SampleShadow(shadowCoord, shadowBias, 0.);
-    for (int i = 0; i < 4; i++)
-    {
-        vec2 off = rndRot * earlyOffsets4[i] * blurScale;
-        vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
-        sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
-        result += SampleShadow(sampleCoord, shadowBias, 0.);
-    }
-    result /= 5.;
+    result += SampleShadow(shadowCoord);
+    // for (int i = 0; i < 4; i++)
+    // {
+    //     vec2 off = rndRot * earlyOffsets4[i] * blurScale;
+    //     vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
+    //     sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
+    //     result += SampleShadow(sampleCoord);
+    // }
+    // result /= 5.;
 
-    if (length(result) > 0. && length(result) < 1.) // Only filter when inside the penumbra
+    // if (length(result) > 0. && length(result) < 1.) // Only filter when inside the penumbra
     {
         // Sample and filter shadow
         for (int i = 0; i < SHADOW_FILTER_SAMPLES; i++)
@@ -319,9 +320,9 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 te
             vec2 off = rndRot * poissonDisk16[i] * blurScale;
             vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
             sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
-            result += SampleShadow(sampleCoord, shadowBias, 0.);
+            result += SampleShadow(sampleCoord);
         }
-        result /= SHADOW_FILTER_SAMPLES;
+        result /= SHADOW_FILTER_SAMPLES + 1.;
     }
 
     // return vec3(lod);
@@ -372,7 +373,7 @@ vec3 VoxelShadows(vec3 shadowSpaceCoord, vec3 staticWorldSpace, float phongMask)
     return vec3(test);
 }
 
-vec3 ShadowPass(vec3 worldPos, vec3 normal, float phongMask, float translucents)
+vec3 ShadowPass(vec3 worldPos, float phongMask, float translucents)
 {
     // Get shadow sample coordinates
 
@@ -503,9 +504,9 @@ void main()
         normalTex = clamp(normalTex, vec3(0.), vec3(1.));
     }
 
-    vec3 normal = normalize(normalTex * 2. - 1.);
+    vec3 viewNormal = normalize(normalTex * 2. - 1.);
 
-    vec3 worldNormals = vec3(gbufferModelViewInverse * vec4(normal, 1.));
+    vec3 worldNormals = vec3(gbufferModelViewInverse * vec4(viewNormal, 1.));
     worldNormals = normalize(worldNormals);
 
     // Exclude some blocks with weird artifacts
@@ -565,20 +566,21 @@ void main()
         vec3 ambientSunlight = ambientSunAmbientCol * ambientIntensity;
 
     // Shadow mapping
-    float phongDiffuse = max(dot(normal, shadowLightPosition * .01), 0.);
+    float phongDiffuse = max(dot(viewNormal, shadowLightPosition * .01), 0.);
     float softDiffuse = .8;
     float diffuseMask = mix(phongDiffuse, softDiffuse, translucents); // Grass ignores Phong diffuse
     vec3 diffuse = vec3(1.);
     #ifdef SHADOW_MAPPING
-        // if (diffuseMask > 0. && waterMask == 0.) // Skip processing shadows on water
-        //     diffuse = ShadowPass(world, normal, skyDiffuse, translucents);
-        // else diffuse = vec3(diffuseMask);
+        vec3 worldSampleCoord = world + worldNormals * NORMAL_BIAS;
+        if (diffuseMask > 0. && waterMask == 0.) // Skip processing shadows on water
+            diffuse = ShadowPass(worldSampleCoord, skyDiffuse, translucents);
+        else diffuse = vec3(diffuseMask);
     #endif
 
-    vec3 shadowView = (shadowModelView * vec4(world, 1.)).xyz;
-    vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView) * .5 + .5;
-    vec3 vsmShadow = texture2D(shadowcolor0, shadowSpace.xy).rgb;
-    diffuse = vsmShadow;
+    // vec3 shadowView = (shadowModelView * vec4(world, 1.)).xyz;
+    // vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView) * .5 + .5;
+    // vec3 vsmShadow = texture2D(shadowcolor0, shadowSpace.xy).rgb;
+    // diffuse = vsmShadow;
 
     // Ambient light
     vec3 ambient = mix(undergroundAmbient, overworldAmbient, eyeSkyBrightnessFac);
@@ -592,7 +594,7 @@ void main()
                        viewDepth;
 
     float waterFogFac = pow(waterDepth, 1.) * .1;
-    waterFogFac = tonemap(waterFogFac) * 1.1;
+    waterFogFac = ReinhardtTonemap(waterFogFac) * 1.;
     waterFogFac = min(waterFogFac, 1.);
     waterFogFac = mix(waterFogFac, waterFogFac * .5, nightVision);
 
@@ -616,7 +618,8 @@ void main()
     // Get color
     vec3 fogCol = mix(pow(fogColor, vec3(2.2)) * .5, skyPass.rgb, eyeSkyBrightnessFac);
     vec3 lightFogCol = mix(moonFogCol, sunFogCol, smoothstep(.5, .8, dayNightFac));
-    vec3 screenAddLight = 1. - (1. - fogCol) * (1. - lightFogCol);
+    // vec3 screenAddLight = 1. - (1. - fogCol) * (1. - lightFogCol);
+    vec3 screenAddLight = fogCol + lightFogCol;
     fogCol = mix(fogCol, screenAddLight, sunTintFac);
     float fogLuma = dot(fogCol, vec3(.2126, .7152, .0722));
 
@@ -632,19 +635,20 @@ void main()
     shadowsFac *= smoothstep(.4, .0, fogFac); // "diffuse" shadows in fog
 
     // Sky reflection
-    vec3 reflDir = normalize(reflect(view, normal));
+    vec3 reflDir = normalize(reflect(view, viewNormal));
     float reflSunTintFac = GetSunTintFac(reflDir);
     reflSunTintFac *= 1. - lightSourceTransitionMask;
     reflSunTintFac *= eyeSkyBrightnessFac;
     vec3 skyReflection = pow(calcSkyColor(reflDir), vec3(2.2));
-    screenAddLight = 1. - (1. - skyReflection) * (1. - lightFogCol);
+    // screenAddLight = 1. - (1. - skyReflection) * (1. - lightFogCol);
+    screenAddLight = skyReflection + lightFogCol;
     skyReflection = mix(skyReflection, screenAddLight, reflSunTintFac);
 
     // Sky environment
-    // reflSunTintFac = GetSunTintFac(normal);
+    // reflSunTintFac = GetSunTintFac(viewNormal);
     // reflSunTintFac *= 1. - lightSourceTransitionMask;
     // reflSunTintFac *= eyeSkyBrightnessFac;
-    // vec3 skyDiffuseRefl = pow(calcSkyColor(normal), vec3(2.2));
+    // vec3 skyDiffuseRefl = pow(calcSkyColor(viewNormal), vec3(2.2));
     // screenAddLight = 1. - (1. - skyDiffuseRefl) * (1. - lightFogCol);
     // skyDiffuseRefl = mix(skyDiffuseRefl, screenAddLight, reflSunTintFac);
     
@@ -674,7 +678,7 @@ void main()
     col = mix(col, col + additiveSurfaceCol * .02, iceMask);
 
     // Add sky reflection if no SSR --------------------------
-    float fresnel = GetWaterFresnel(view, normal);
+    float fresnel = GetWaterFresnel(view, viewNormal);
     #ifndef SSR
     #ifdef SKY_REFLECTIONS
         col += skyReflection * waterPass.a * fresnel * eyeSkyBrightnessFac;
@@ -687,7 +691,7 @@ void main()
 
 
     // Apply fog -----------------------------------------------------------
-    float underwaterMult = min((1. - isEyeInWater), 1.);
+    float underwaterMult = min((1. - isEyeInWater), 1.); // Attenuate effect under water
     // Darken when bright fog
     col = mix(col, col * .2, vec3(fogFac) * underwaterMult * length(fogColor));
     // Overworld fog
@@ -699,7 +703,8 @@ void main()
     float albedoLum = dot(albedo, vec3(.2126, .7152, .0722)) * skyMask;
     float sunMask = 1. - (3.5 * (-albedoLum + .95)); // Gradually select very bright pixels
     sunMask = clamp(sunMask, 0., 1.);
-    screenAddLight = 1. - (1. - skyPass.rgb) * (1. - lightFogCol);
+    // screenAddLight = 1. - (1. - skyPass.rgb) * (1. - lightFogCol);
+    screenAddLight = skyPass.rgb + lightFogCol;
     vec3 skyAlbedo = skyPass.rgb;
     skyAlbedo = mix(skyAlbedo.rgb, screenAddLight, sunTintFac); // Add sun tint
     col = mix(col, skyAlbedo, skyMask); // Seperate the sky
@@ -722,7 +727,7 @@ void main()
     // col = vec3(normalTex);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(texture2D(shadowcolor0, uv).rgb));
+        col = viewLayer(col, texCoord, vec3(waterTint));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

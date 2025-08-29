@@ -46,7 +46,8 @@ uniform int isEyeInWater;
 
 #define STEP_AMOUNT 40
 #define STEP_SIZE_MAG 3.
-#define FADE_OUT_SIZE .15
+#define FADE_OUT_SIZE .1
+#define BEYOND_HORIZONTAL_EDGE_SIZE .1
 #define FALSE_REFLECTION_MARGIN 20.
 
 /// Arbitrarily sample sky ---------------------------------------
@@ -110,11 +111,11 @@ void main()
             // vec3 clip = vec3(screenspaceMarchPos.xy, sampleDepth) * 2. - 1.;
             // vec3 sampleViewSpace = projectAndDivide(gbufferProjection, clip);
 
-            if (screenspaceMarchPos.x > 1. || screenspaceMarchPos.x < 0. || screenspaceMarchPos.y > 1. || screenspaceMarchPos.y < 0.)
-            {
-                fac = 0.;
-                break;
-            }
+            // if (screenspaceMarchPos.x > 1. || screenspaceMarchPos.x < 0. || screenspaceMarchPos.y > 1. || screenspaceMarchPos.y < 0.)
+            // {
+            //     fac = 0.;
+            //     break;
+            // }
 
             if (screenspaceMarchPos.z > sampleDepth)
             {
@@ -141,9 +142,9 @@ void main()
         /// Combine ----------------------------------------------------
         float waterFresnel = GetWaterFresnel(viewSpace, normal);
 
-        float edgeFadeout = smoothstep(FADE_OUT_SIZE, .0, screenspaceMarchPos.x) +
-                            smoothstep(1. - FADE_OUT_SIZE, 1., screenspaceMarchPos.x);
-        edgeFadeout += smoothstep(FADE_OUT_SIZE, .0, screenspaceMarchPos.y) +
+        float edgeFadeout = smoothstep(FADE_OUT_SIZE, -BEYOND_HORIZONTAL_EDGE_SIZE, screenspaceMarchPos.x) +
+                            smoothstep(1. - FADE_OUT_SIZE, 1. + BEYOND_HORIZONTAL_EDGE_SIZE, screenspaceMarchPos.x);
+        edgeFadeout += smoothstep(FADE_OUT_SIZE, 0., screenspaceMarchPos.y) +
                        smoothstep(1. - FADE_OUT_SIZE, 1., screenspaceMarchPos.y);
         edgeFadeout = clamp(edgeFadeout, 0., 1.);
         fac *= 1. - edgeFadeout;

@@ -20,6 +20,7 @@ uniform sampler2D colortex10;    // Perlin Noise
 // uniform int frameCounter;
 uniform float frameTimeCounter;
 uniform vec3 cameraPosition;
+uniform ivec2 atlasSize;
 
 void main()
 {
@@ -45,7 +46,7 @@ void main()
     wave *= vec2(.05, .1) * 5.;
     off.xy += wave;
 
-    float grassHeightMask = 1. - fract(texCoords.y * 1024.);
+    float grassHeightMask = 1. - fract(texCoords.y * atlasSize.y);
     grassHeightMask = (grassHeightMask - .3) * 5.;
     grassHeightMask = clamp(grassHeightMask, 0., 1.);
     
