@@ -34,6 +34,8 @@ uniform mat4 gbufferModelView;
 uniform int frameCounter;
 uniform float viewWidth;
 uniform float viewHeight;
+uniform float near;
+uniform float far;
 
 uniform ivec2 eyeBrightnessSmooth;
 uniform vec3 skyColor;
@@ -45,6 +47,7 @@ uniform int isEyeInWater;
 #define STEP_AMOUNT 40
 #define STEP_SIZE_MAG 3.
 #define FADE_OUT_SIZE .15
+#define FALSE_REFLECTION_MARGIN 20.
 
 /// Arbitrarily sample sky ---------------------------------------
 // Functions taken from the Base-330 template
@@ -87,7 +90,7 @@ void main()
     vec3 result = srcCol;
     float fac = 1.;
     bool hitSky = false;
-    if (waterLayer > .1)
+    if (waterLayer > .001)
     {
         vec3 skyReflection = vec3(0.);
         #ifdef SKY_REFLECTIONS
@@ -103,7 +106,7 @@ void main()
         {
             screenspaceMarchPos = projectAndDivide(gbufferProjection, marchPos); // P matrix
             screenspaceMarchPos = screenspaceMarchPos * .5 + .5; // Map to 0-1
-            float sampleDepth = texture2D(depthtex0, screenspaceMarchPos.xy).r;
+            float sampleDepth = texture2D(depthtex0, screenspaceMarchPos.xy).r; // Sampling depth in NDC
             // vec3 clip = vec3(screenspaceMarchPos.xy, sampleDepth) * 2. - 1.;
             // vec3 sampleViewSpace = projectAndDivide(gbufferProjection, clip);
 
@@ -115,7 +118,7 @@ void main()
 
             if (screenspaceMarchPos.z > sampleDepth)
             {
-                if (screenspaceMarchPos.z - sampleDepth > .005) fac = 0.;
+                if (linearizeDepth(screenspaceMarchPos.z, near, far) - linearizeDepth(sampleDepth, near, far) > FALSE_REFLECTION_MARGIN) fac = 0.;
                 break;
             }
 
@@ -144,13 +147,14 @@ void main()
                        smoothstep(1. - FADE_OUT_SIZE, 1., screenspaceMarchPos.y);
         edgeFadeout = clamp(edgeFadeout, 0., 1.);
         fac *= 1. - edgeFadeout;
+        if (texture2D(colortex11, screenspaceMarchPos.xy).a > .1) fac = 0.; // Lessens artifacts at shallow angles
 
         vec3 reflection = texture2D(colortex5, screenspaceMarchPos.xy).rgb;
         // if (dot(reflection, vec3(.2126, .7152, .0722)) > .8 && hitSky) fac = 1.;
         reflection *= fac;
         reflection = mix(reflection, skyReflection, (1.-fac) * eyeSkyBrightnessFac);
         result = srcCol + (reflection * waterLayer * waterFresnel * (1. - fogFac));
-        // result = vec3(edgeFadeout);
+        // result = vec3(fac);
     }
 
     /* RENDERTARGETS:5 */

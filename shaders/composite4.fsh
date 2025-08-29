@@ -494,12 +494,13 @@ void main()
 
     // Water normals
     vec3 normalOff = vec3(0.);
-    if (waterPass.a > 0.)
+    if (waterAndIce > 0.)
     {
         normalOff += (texture2D(colortex9, worldStatic.xz * .1 + frameCounter * .0005).rgb * 2. - 1.) * .3;
         normalOff += (texture2D(colortex9, worldStatic.xz * 1.5 + frameCounter * .0003).rgb * 2. - 1.) * .3;
         normalOff += texture2D(colortex9, worldStatic.xz * .02 + frameCounter * .0003).rgb * 2. - 1.;
         normalTex += normalOff * .008;
+        normalTex = clamp(normalTex, vec3(0.), vec3(1.));
     }
 
     vec3 normal = normalize(normalTex * 2. - 1.);
@@ -670,7 +671,7 @@ void main()
     // waterSurfaceCol += lightmapCol * .7; // Add a bit of underwater light
     col = mix(col, col * waterSurfaceCol, waterAndIce); // Draw water surface
     vec3 additiveSurfaceCol = waterPass.rgb;
-    col = mix(col, col + additiveSurfaceCol * .02, iceMask); // Draw water surface
+    col = mix(col, col + additiveSurfaceCol * .02, iceMask);
 
     // Add sky reflection if no SSR --------------------------
     float fresnel = GetWaterFresnel(view, normal);
@@ -718,10 +719,10 @@ void main()
 
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
-    // col = vec3(diffuse);
+    // col = vec3(normalTex);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(fresnel));
+        col = viewLayer(col, texCoord, vec3(waterPass.a));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
