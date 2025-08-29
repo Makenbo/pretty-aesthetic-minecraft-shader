@@ -570,15 +570,15 @@ void main()
     float diffuseMask = mix(phongDiffuse, softDiffuse, translucents); // Grass ignores Phong diffuse
     vec3 diffuse = vec3(1.);
     #ifdef SHADOW_MAPPING
-        if (diffuseMask > 0. && waterMask == 0.) // Skip processing shadows on water
-            diffuse = ShadowPass(world, normal, skyDiffuse, translucents);
-        else diffuse = vec3(diffuseMask);
+        // if (diffuseMask > 0. && waterMask == 0.) // Skip processing shadows on water
+        //     diffuse = ShadowPass(world, normal, skyDiffuse, translucents);
+        // else diffuse = vec3(diffuseMask);
     #endif
 
-    // vec3 shadowView = (shadowModelView * vec4(world, 1.)).xyz;
-    // vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView) * .5 + .5;
-    // vec3 vsmShadow = texture2D(colortex14, shadowSpace.xy).rgb;
-    // diffuse = vsmShadow;
+    vec3 shadowView = (shadowModelView * vec4(world, 1.)).xyz;
+    vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView) * .5 + .5;
+    vec3 vsmShadow = texture2D(shadowcolor0, shadowSpace.xy).rgb;
+    diffuse = vsmShadow;
 
     // Ambient light
     vec3 ambient = mix(undergroundAmbient, overworldAmbient, eyeSkyBrightnessFac);
@@ -722,7 +722,7 @@ void main()
     // col = vec3(normalTex);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(waterPass.a));
+        col = viewLayer(col, texCoord, vec3(texture2D(shadowcolor0, uv).rgb));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

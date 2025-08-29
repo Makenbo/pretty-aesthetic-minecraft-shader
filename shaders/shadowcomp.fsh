@@ -61,7 +61,6 @@ void main()
     float bias = .001;
     float shadowMask = step(shadowSpace.z - bias, shadowDepth);
 
-    /* RENDERTARGETS:14 */
-    gl_FragData[0] = vec4(vec3(shadowMask), 1.);
+    gl_FragData[0] = vec4(vec3(screenCoord), 1.);
 
 }
