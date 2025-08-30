@@ -1,8 +1,9 @@
 // Shadows
 
 #define SHADOW_MAPPING // Dynamic shadows from the sun. Very big performance impact. Disabling this will make all other shadow options irrelevant. This option can't be disabled in OptiFine.
-#define VARIABLE_PENUMBRA // Shadows are softer the further they are
+#define VARIABLE_PENUMBRA // Shadows are softer the further they are. Increase "max shadow blur" for a more noticible effect.
 #define SHADOW_FILTER_SAMPLES 16 // [4 6 8 12 16] Determines noisiness of blurred shadows
+#define MAX_SHADOW_BLUR 2 // [1 2 3 4 5 7 10 15 20 25 30] Determines how much can the shadows be blurred. Constant size blur with regular shadows, dynamic size blur with variable penumbra. Medium performance impact.
 
 // Reflections
 
