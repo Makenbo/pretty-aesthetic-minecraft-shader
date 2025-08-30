@@ -57,7 +57,6 @@ const float ambientOcclusionLevel = 1.;
                                             // with something for the fog
 
 // Modifiable variables
-const int shadowMapResolution = 2560; // [512 1024 1536 2048 2560 3072 4096]
 const int noiseTextureResolution = 128;
 const float sunPathRotation = -40.;
 
@@ -99,7 +98,8 @@ uniform sampler2D noisetex;
 
 const bool shadowtex0Nearest = true;
 const bool shadowtex1Nearest = true;
-const bool shadowcolor0Nearest = true;
+// const bool shadowcolor0Nearest = true;
+// const bool generateShadowColorMipmap = true; // warning: super weird behaviour
 // const bool generateShadowMipmap = true;
 
 // Constants
@@ -330,6 +330,30 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 te
 
     return vec3(result);
 }
+
+
+// VSM ---------------------
+
+#define MIN_VARIANCE .0002
+#define LEAK_REDUCTION_AMOUNT .0
+
+// Taken from GPU Gems
+float ChebyshevUpperBound(vec2 moments, float depth)
+{
+    float p = depth <= moments.x ? 1. : 0.; // valid for t > moments.x
+    float variance = moments.y - (moments.x*moments.x);
+    variance = max(variance, MIN_VARIANCE);
+
+    float d = depth - moments.x; // probabilistic upper bound
+    float p_max = variance / (variance + d*d);
+    p_max = linstep(LEAK_REDUCTION_AMOUNT, 1., p_max);
+
+    float result = max(p, p_max);
+
+    return result;
+}
+
+// Voxel shadows attempt -----
 
 // Taken from lygia github:
 // https://github.com/patriciogonzalezvivo/lygia/blob/main/geometry/aabb/intersect.glsl
@@ -568,19 +592,23 @@ void main()
     float phongDiffuse = max(dot(viewNormal, shadowLightPosition * .01), 0.);
     phongDiffuse = mix(phongDiffuse, 1., transparentPass.a); // Make glass not totaly broken
     float softDiffuse = .8;
-    float diffuseMask = mix(phongDiffuse, softDiffuse, translucents); // Grass ignores Phong diffuse
+    float phongMask = mix(phongDiffuse, softDiffuse, translucents); // Grass ignores Phong diffuse
     vec3 diffuse = vec3(1.);
     #ifdef SHADOW_MAPPING
         vec3 worldSampleCoord = worldNoTrans + worldNormals * NORMAL_BIAS;
-        if (diffuseMask > 0. && waterMask == 0.) // Skip processing shadows on water
-            diffuse = ShadowPass(worldSampleCoord, skyDiffuse, translucents);
-        else diffuse = vec3(diffuseMask);
+        if (phongMask > 0. && waterMask == 0.) // Skip processing shadows on water
+            diffuse = ShadowPass(worldSampleCoord, phongMask, translucents);
+        else diffuse = vec3(phongMask);
     #endif
 
-    // vec3 shadowView = (shadowModelView * vec4(world, 1.)).xyz;
-    // vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView) * .5 + .5;
-    // vec3 vsmShadow = texture2D(shadowcolor0, shadowSpace.xy).rgb;
-    // diffuse = vsmShadow;
+    vec3 shadowView = (shadowModelView * vec4(worldSampleCoord, 1.)).xyz;
+    vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView);
+    shadowSpace /= ShadowDistortion(shadowSpace);
+    shadowSpace = shadowSpace * .5 + .5;
+    vec2 moments = texture2D(shadowcolor0, shadowSpace.xy).rg;
+    float shadowContribution = ChebyshevUpperBound(moments, shadowSpace.z);
+    diffuse = vec3(shadowContribution);
+    diffuse = min(diffuse, phongMask);
 
     // Ambient light
     vec3 ambient = mix(undergroundAmbient, overworldAmbient, eyeSkyBrightnessFac);
@@ -724,10 +752,10 @@ void main()
 
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
-    // col = vec3(normalTex);
+    // col = vec3(texture2D(shadowcolor0, uv).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(transparentPass.a));
+        col = viewLayer(col, texCoord, vec3(texture2D(shadowcolor0, uv).rgb));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

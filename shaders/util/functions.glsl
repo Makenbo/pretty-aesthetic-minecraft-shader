@@ -25,6 +25,11 @@ vec3 desaturate(vec3 col, float fac)
     return mix(col, vec3(lum), fac);
 }
 
+float linstep(float minimum, float maximum, float v)
+{
+    return clamp((v - minimum) / (maximum - minimum), 0, 1);
+}
+
 // Stolen from RRE36
 float ditherGradNoise()
 {
@@ -100,4 +105,17 @@ vec3 GaussBlur3f(sampler2D colTex, vec2 uv, float texSize, ivec2 blurDir)
     }
 
     return col / weightSum;
+}
+
+vec2 BoxBlur2f(sampler2D tex, vec2 uv, float texSize, int blurSize, ivec2 blurDir)
+{
+    vec2 col = vec2(0.);
+
+    for (int i = -blurSize; i <= blurSize; i++)
+    {
+        vec2 off = texSize * blurDir * (i * 2. - .5);
+        col += texture2D(tex, uv + off).rg;
+    }
+
+    return col / (blurSize * 2. + 1.);
 }

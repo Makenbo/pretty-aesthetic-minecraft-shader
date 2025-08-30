@@ -21,5 +21,5 @@ vec3 ShadowDistortion(in vec3 position)
     // position.z = sigmoidCurve(position.z);
     
     // return vec3(1.);
-    return distortFac;
+return distortFac;
 }
