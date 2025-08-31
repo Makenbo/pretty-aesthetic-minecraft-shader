@@ -2,7 +2,7 @@
     Screenspace reflections
 */
 
-#version 120
+#version 330 compatibility
 
 #include "util/functions.glsl"
 #include "shader_settings.glsl"

@@ -1,4 +1,4 @@
-#version 120
+#version 330 compatibility
 
 #include "shader_settings.glsl"
 #include "util/functions.glsl"

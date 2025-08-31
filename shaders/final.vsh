@@ -1,4 +1,4 @@
-#version 120
+#version 330 compatibility
 
 varying vec2 texCoord;
 void main()

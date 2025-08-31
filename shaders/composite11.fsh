@@ -2,7 +2,7 @@
     Post blurring - vertical blur
 */
 
-#version 120
+#version 330 compatibility
 
 // #include "util/constants.glsl"
 #include "shader_settings.glsl"
