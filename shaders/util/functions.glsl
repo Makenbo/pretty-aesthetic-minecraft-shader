@@ -2,6 +2,8 @@
 
 // Usefull tidbits -----------------------------------------------------------------
 
+// Transformations
+
 // Linearizes the depth value taken from the depth buffer (which is in NDC)
 float linearizeDepth(float depth, float near, float far)
 {
@@ -14,9 +16,37 @@ vec3 projectAndDivide(mat4 matrix, vec3 position)
     return homogeneousPos.xyz / homogeneousPos.w;
 }
 
+float linstep(float minimum, float maximum, float v)
+{
+    return clamp((v - minimum) / (maximum - minimum), 0, 1);
+}
+
+mat2 rotationMat2D(float angle)
+{
+    float cosAngle = cos(angle);
+    float sinAngle = sin(angle);
+    return mat2(cosAngle, sinAngle, -sinAngle, cosAngle);
+}
+
+vec3 worldToShadowNDC(vec3 worldPos, mat4 shadowModelView, mat4 shadowProjection)
+{
+    vec3 shadowView = (shadowModelView * vec4(worldPos, 1.)).xyz;
+    vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView);
+    return shadowSpace;
+}
+
+vec3 shadowNDCToWorld(vec3 shadowSpace, mat4 shadowModelViewInverse, mat4 shadowProjectionInverse)
+{
+    vec3 shadowView = projectAndDivide(shadowProjectionInverse, shadowSpace);
+    vec3 worldPos = (shadowModelViewInverse * vec4(shadowView, 1.)).xyz;
+    return worldPos;
+}
+
+// Colors
+
 float colToLum(vec3 col)
 {
-    return dot(col, vec3(.2126, .7152, .0722));
+    return dot(col, lumaCoeffRec709);
 }
 
 vec3 desaturate(vec3 col, float fac)
@@ -25,15 +55,12 @@ vec3 desaturate(vec3 col, float fac)
     return mix(col, vec3(lum), fac);
 }
 
-float linstep(float minimum, float maximum, float v)
-{
-    return clamp((v - minimum) / (maximum - minimum), 0, 1);
-}
+// Other
 
 // Stolen from RRE36
-float ditherGradNoise()
+float ditherGradNoise(vec2 uv)
 {
-    return fract(52.9829189*fract(0.06711056*gl_FragCoord.x + 0.00583715*gl_FragCoord.y));
+    return fract(52.9829189*fract(0.06711056*uv.x + 0.00583715*uv.y));
 }
 
 // Water --------------------------------------------------------------------------------

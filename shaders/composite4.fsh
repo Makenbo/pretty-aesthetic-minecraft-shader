@@ -83,6 +83,9 @@ const int colortex12Format = RGBA16;
 const int colortex14Format = RGB8;
 */
 
+#if SHADOW_MODE == 1 // VSM
+    /* const int shadowcolor0Format = RG16F; */
+#endif
 
 uniform sampler2D depthtex2;    // LUT
 uniform sampler2D colortex9;    // Perlin Noise
@@ -94,7 +97,8 @@ uniform sampler2D depthtex1;    // Excludes transparent geometry
 uniform sampler2D shadowtex0;
 uniform sampler2D shadowtex1;   // Excludes transparent geometry
 uniform sampler2D shadowcolor0; // Albedo from the sun
-uniform sampler2D noisetex;
+uniform sampler2D noisetex;     // Blue noise 256x256
+// #define BLUE_NOISE_SIZE 256
 
 const bool shadowtex0Nearest = true;
 const bool shadowtex1Nearest = true;
@@ -108,6 +112,7 @@ uniform vec3 shadowLightPosition;   // Direction of the highest celestial body
 uniform int frameCounter;
 uniform float viewWidth;
 uniform float viewHeight;
+#define SCREEN_SIZE vec2(viewWidth, viewHeight)
 uniform float near;
 uniform float far;
 uniform vec3 skyColor;
@@ -271,17 +276,13 @@ float ShadowDistance(vec3 pos, mat2 rndRot, float blurMult)
     return shadowDist;
 }
 
-vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 texelSize)
+vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents)
 {
     // Randomize angle of sample offset
-    float angle = texture2D(noisetex, texCoord * 20.).r * 6.28 * frameCounter;
-    // float angle = ditherGradNoise() * 3.1415;
-    float cosAngle = cos(angle);
-    float sinAngle = sin(angle);
-    mat2 rndRot = mat2(cosAngle, sinAngle, -sinAngle, cosAngle)
-                  / (shadowMapResolution);
-                //   / (texelSize.x * shadowMapResolution);
-
+    float angle = texture2D(noisetex, texCoord * SCREEN_SIZE / noiseTextureResolution * .1).r;
+    angle *= frameCounter * 6.18;
+    // float angle = ditherGradNoise(texCoord) * 3.1415;
+    mat2 rndRot = rotationMat2D(angle) / shadowMapResolution;
 
     // Calculate distance to the occluder
     float blurScale = MAX_SHADOW_BLUR;
@@ -297,11 +298,9 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 te
     // Get relative shadow bias
     // float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
     // shadowBias *= .001;
-    float shadowBias = .001;
 
     // Early branching samples
     vec3 result = vec3(0.);
-    result += SampleShadow(shadowCoord);
     // for (int i = 0; i < 4; i++)
     // {
     //     vec2 off = rndRot * earlyOffsets4[i] * blurScale;
@@ -309,7 +308,7 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 te
     //     sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
     //     result += SampleShadow(sampleCoord);
     // }
-    // result /= 5.;
+    // result /= 4.;
 
     // if (length(result) > 0. && length(result) < 1.) // Only filter when inside the penumbra
     {
@@ -321,7 +320,7 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 te
             sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
             result += SampleShadow(sampleCoord);
         }
-        result /= SHADOW_FILTER_SAMPLES + 1.;
+        result /= SHADOW_FILTER_SAMPLES;
     }
 
     // return vec3(lod);
@@ -334,8 +333,8 @@ vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents, vec3 te
 
 // VSM ---------------------
 
-#define MIN_VARIANCE .0002
-#define LEAK_REDUCTION_AMOUNT .0
+#define MIN_VARIANCE .00002
+#define LEAK_REDUCTION_AMOUNT .1
 
 // Taken from GPU Gems
 float ChebyshevUpperBound(vec2 moments, float depth)
@@ -351,6 +350,13 @@ float ChebyshevUpperBound(vec2 moments, float depth)
     float result = max(p, p_max);
 
     return result;
+}
+
+float SampleVSM(vec3 shadowSpace)
+{
+    vec2 moments = texture2D(shadowcolor0, shadowSpace.xy).rg;
+    float shadowContribution = ChebyshevUpperBound(moments, shadowSpace.z);
+    return shadowContribution;
 }
 
 // Voxel shadows attempt -----
@@ -399,28 +405,29 @@ vec3 VoxelShadows(vec3 shadowSpaceCoord, vec3 staticWorldSpace, float phongMask)
 vec3 ShadowPass(vec3 worldPos, float phongMask, float translucents)
 {
     // Get shadow sample coordinates
-
-    // Convert screenspace coord to shadow space coord
-    vec4 shadowSpace = shadowProjection * shadowModelView * vec4(worldPos, 1.);
-    shadowSpace.xyz /= shadowSpace.w;
-
-    // Get texel size after distortion
-    vec3 distortFac = ShadowDistortion(shadowSpace.xyz);
-    shadowSpace.xyz /= distortFac;
     
-    vec3 shadowSampleCoord = shadowSpace.xyz * .5 + .5;
+    // Convert screenspace coord to shadow space coord
+    vec3 shadowView = (shadowModelView * vec4(worldPos, 1.)).xyz;
+    vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView);
 
-    vec3 texelSize = distortFac;
-    texelSize *= 8.;
-    #ifndef VARIABLE_PENUMBRA
-        texelSize.xy = vec2(1.);
-    #endif
+    vec3 worldToShadowUp = normalize((shadowModelView * vec4(0., 1., 0., 0.)).xyz);
+    ShadowDistortion(shadowSpace, worldToShadowUp);
+
+    // Convert from NDC to screenspace
+    shadowSpace = shadowSpace * .5 + .5;
 
     // Filter shadows
-    // vec3 shadowPass = VoxelShadows(shadowSampleCoord, worldPos + cameraPosition, phongMask);
-    // vec3 shadowPass = SampleShadow(shadowSampleCoord, .001, 0.);
-    vec3 shadowPass = ShadowFilter(shadowSampleCoord, phongMask, translucents, texelSize);
+    #if MAX_SHADOW_BLUR == 0
+        vec3 shadowPass = SampleShadow(shadowSpace);
+    #elif SHADOW_MODE == 0 // PCF
+        vec3 shadowPass = ShadowFilter(shadowSpace, phongMask, translucents);
+    #elif SHADOW_MODE == 1 // VSM
+        vec3 shadowPass = vec3(SampleVSM(shadowSpace));
+    #elif SHADOW_MODE == 2 // Voxel shadows
+        vec3 shadowPass = VoxelShadows(shadowSpace, worldPos + cameraPosition, phongMask);
+    #endif
 
+    // return vec3(worldToShadowUp);
     return min(shadowPass, vec3(phongMask));
 }
 
@@ -578,37 +585,30 @@ void main()
     vec2 lightmap = pow(texture2D(colortex2, uv).rg, vec2(2.2));
     float skyDiffuse = lightmap.y;
 
-        // Sky light
-        // lightmap.y = isEyeInWater == 0 ? pow(lightmap.y, 2.) : lightmap.y;
-        lightmap.y = pow(lightmap.y, 2.);
+    // Sky light
+    lightmap.y = pow(lightmap.y, 2.);
+    // lightmap.y = isEyeInWater == 0 ? pow(lightmap.y, 2.) : lightmap.y;
 
-        vec3 skyCol = mix(nightSkyCol, daySkyCol, dayNightFac);
-        float ambientIntensity = mix(ambientMoonIntensity, ambientSunIntensity, dayNightFac);
-        vec3 ambientSunAmbientCol = mix(coldAmbient, warmAmbient, lightmap.y);
-        ambientSunAmbientCol = mix(moonCol, ambientSunAmbientCol, dayNightFac);
-        vec3 ambientSunlight = ambientSunAmbientCol * ambientIntensity;
+    vec3 skyCol = mix(nightSkyCol, daySkyCol, dayNightFac);
+    float ambientIntensity = mix(ambientMoonIntensity, ambientSunIntensity, dayNightFac);
+    vec3 ambientSunAmbientCol = mix(coldAmbient, warmAmbient, lightmap.y);
+    ambientSunAmbientCol = mix(moonCol, ambientSunAmbientCol, dayNightFac);
+    vec3 ambientSunlight = ambientSunAmbientCol * ambientIntensity;
 
     // Shadow mapping
-    float phongDiffuse = max(dot(viewNormal, shadowLightPosition * .01), 0.);
-    phongDiffuse = mix(phongDiffuse, 1., transparentPass.a); // Make glass not totaly broken
-    float softDiffuse = .8;
-    float phongMask = mix(phongDiffuse, softDiffuse, translucents); // Grass ignores Phong diffuse
-    vec3 diffuse = vec3(1.);
     #ifdef SHADOW_MAPPING
+
+        float phongDiffuse = max(dot(viewNormal, shadowLightPosition * .01), 0.);
+        phongDiffuse = mix(phongDiffuse, 1., transparentPass.a); // Make glass not totaly broken
+        float phongMask = mix(phongDiffuse, .8, translucents); // Grass ignores Phong diffuse
         vec3 worldSampleCoord = worldNoTrans + worldNormals * NORMAL_BIAS;
+        vec3 diffuse = vec3(1.);
+
         if (phongMask > 0. && waterMask == 0.) // Skip processing shadows on water
             diffuse = ShadowPass(worldSampleCoord, phongMask, translucents);
         else diffuse = vec3(phongMask);
-    #endif
 
-    vec3 shadowView = (shadowModelView * vec4(worldSampleCoord, 1.)).xyz;
-    vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView);
-    shadowSpace /= ShadowDistortion(shadowSpace);
-    shadowSpace = shadowSpace * .5 + .5;
-    vec2 moments = texture2D(shadowcolor0, shadowSpace.xy).rg;
-    float shadowContribution = ChebyshevUpperBound(moments, shadowSpace.z);
-    diffuse = vec3(shadowContribution);
-    diffuse = min(diffuse, phongMask);
+    #endif
 
     // Ambient light
     vec3 ambient = mix(undergroundAmbient, overworldAmbient, eyeSkyBrightnessFac);
@@ -637,6 +637,8 @@ void main()
     float worldYperlin = texture2D(colortex9, fract(worldStatic.xz * .003) + frameCounter * .0001).g + .3;
     float fogHeightMult = clamp(pow(-world.y * .01, 1.5), 0., .7) * step(world.y, 0); // not in 0-1 range
     fogHeightMult *= mix(1., worldXZperlin * worldYperlin, 1.);
+    fogHeightMult = mix(fogHeightMult * .2, fogHeightMult, smoothstep(.0, .25, lightmap.y + waterAndIce) * eyeSkyBrightnessFac); // Attenuate fog when not under skylight
+
 
     // Brighten near the sun object
     float sunTintFac = GetSunTintFac(view);
@@ -752,10 +754,10 @@ void main()
 
     // col = texture2D(colortex3, uv).rgb;
     // col = texture2D(shadowtex0, uv).rrr;
-    // col = vec3(texture2D(shadowcolor0, uv).rgb);
+    // col = vec3(texture2D(noisetex, uv * SCREEN_SIZE / BLUE_NOISE_SIZE).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(texture2D(shadowcolor0, uv).rgb));
+        col = viewLayer(col, texCoord, vec3(texture2D(shadowtex0, uv).rrr));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

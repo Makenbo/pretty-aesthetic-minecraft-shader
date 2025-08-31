@@ -41,10 +41,10 @@ void main()
     vec2 sampleUV = fract(worldPos.xz * .1) + vec2(frameTimeCounter * .18, 0.);
     vec3 off = texture2D(colortex10, sampleUV).rgb * 2. - 1.;
     off *= vec3(.2, .1, .2);
-    vec2 wave = sin((worldPos.xz + worldPos.zx) * .05 + frameTimeCounter * 1.5);
-    wave = pow(max(wave - .5, 0.), vec2(2.));
-    wave *= vec2(.05, .1) * 5.;
-    off.xy += wave;
+    // vec2 wave = sin((worldPos.xz + worldPos.zx) * .05 + frameTimeCounter * 1.5);
+    // wave = pow(max(wave - .5, 0.), vec2(2.));
+    // wave *= vec2(.05, .1) * 5.;
+    // off.xy += wave;
 
     float grassHeightMask = 1. - fract(texCoords.y * atlasSize.y);
     grassHeightMask = (grassHeightMask - .3) * 5.;

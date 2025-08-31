@@ -1,8 +1,7 @@
 #version 120
-#include "distort.glsl"
+
 #include "shader_settings.glsl"
 #include "util/functions.glsl"
-#include "debug/debug_view.glsl"
 
 // FS attributes
 varying vec2 texCoord;
@@ -16,12 +15,18 @@ uniform sampler2D shadowcolor0; // Albedo from the sun
 
 // --------------------------------------------------------
 
+#define SHADOW_BLUR 2
+
 void main()
 {
+#if SHADOW_MODE == 1
+
     vec2 uv = texCoord;
 
     // VSM -------------------------------------------------------
-    vec2 shadowmap = BoxBlur2f(shadowcolor0, uv, 1./shadowMapResolution, 2, ivec2(0, 1));
+    vec2 shadowmap = BoxBlur2f(shadowcolor0, uv, 1./shadowMapResolution, SHADOW_BLUR, ivec2(0, 1));
 
     gl_FragData[0] = vec4(shadowmap, 0., 1.);
+
+#endif
 }

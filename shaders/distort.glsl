@@ -1,3 +1,23 @@
+void rotate2D(inout vec2 pos, float angle)
+{
+    float cosAngle = cos(angle);
+    float sinAngle = sin(angle);
+    pos = mat2(cosAngle, sinAngle, -sinAngle, cosAngle) * pos;
+}
+
+mat3 lookAtMat(vec3 upVec)
+{
+    vec3 eye = vec3(0., 0., 0.);
+    vec3 target = vec3(0., 0., 1.);
+    
+    // Get the new basis
+    vec3 z = normalize(target - eye);
+    vec3 x = normalize(cross(upVec, z));
+    vec3 y = cross(z, x);
+
+    return transpose(mat3(x, y, z));
+}
+
 // S-shaped curve around [0,0]
 // https://www.desmos.com/calculator/fikm1h9oyk
 float sigmoidCurve(float x)
@@ -6,7 +26,7 @@ float sigmoidCurve(float x)
     return ((sigmoid - .5) * 1.3) + (.3 * x);
 }
 
-vec3 ShadowDistortion(in vec3 position)
+void ShadowDistortion(inout vec3 position, vec3 worldToShadowUp)
 {
     // Higher resolution near player
     vec3 distortFac = vec3(1.);
@@ -20,6 +40,8 @@ vec3 ShadowDistortion(in vec3 position)
     distortFac.z = mix(1., length(position.z), .8);
     // position.z = sigmoidCurve(position.z);
     
-    // return vec3(1.);
-return distortFac;
+    position /= distortFac;
+    // rotate2D(position.xy, 3.1415*2.);
+    
+    position = lookAtMat(worldToShadowUp) * position;
 }

@@ -1,1 +1,5 @@
 option.shadowMapResolution = Shadow Resolution
+
+value.SHADOW_MODE.0 = PCF
+value.SHADOW_MODE.1 = VSM
+value.SHADOW_MODE.2 = Voxel Shadows
