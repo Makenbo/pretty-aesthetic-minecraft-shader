@@ -43,7 +43,7 @@ const vec3 moonFogCol = vec3(.2, .35, .7) * .5;
 const float undergroundFogDim = .2;
 
 // Shadows
-#define NORMAL_BIAS .08
+const float NORMAL_BIAS = .2 / (shadowMapResolution/1024.);
 
 // Ambient occlusion
 const float ambientOcclusionLevel = 1.;
@@ -110,6 +110,7 @@ const bool shadowtex1Nearest = true;
 uniform vec3 shadowLightPosition;   // Direction of the highest celestial body
                                     // Always length 100 and in view space!
 uniform int frameCounter;
+uniform float frameTimeCounter;
 uniform float viewWidth;
 uniform float viewHeight;
 #define SCREEN_SIZE vec2(viewWidth, viewHeight)
@@ -237,7 +238,8 @@ vec3 SampleShadow(in vec3 sampleCoord)
     vec3 transmittedCol = shadowCol.rgb + (1. - shadowCol.a);
 
     // Combine masks
-    vec3 result = shadow + transparentObjects * transmittedCol;
+    vec3 result = transparentObjects * transmittedCol;
+    result = saturation(result, 7.); // Make it very saturated
     
     return result;
 }
@@ -276,7 +278,7 @@ float ShadowDistance(vec3 pos, mat2 rndRot, float blurMult)
     return shadowDist;
 }
 
-vec3 ShadowFilter(vec3 shadowCoord, float phongDiff, float translucents)
+vec3 ShadowFilter(vec3 shadowCoord, float translucents)
 {
     // Randomize angle of sample offset
     float angle = texture2D(noisetex, texCoord * SCREEN_SIZE / noiseTextureResolution * .1).r;
@@ -379,7 +381,7 @@ vec2 rayBoxIntersect(const in AABB box, const in vec3 rayOrigin, const in vec3 r
     return vec2(tNear, tFar);
 }
 
-vec3 VoxelShadows(vec3 shadowSpaceCoord, vec3 staticWorldSpace, float phongMask)
+vec3 VoxelShadows(vec3 shadowSpaceCoord, vec3 staticWorldSpace)
 {
     float shadowTexelSize = (1. / shadowMapResolution) * 1.;
     float shadowDepth = texture2D(shadowtex0, shadowSpaceCoord.xy).r + .002;
@@ -402,7 +404,7 @@ vec3 VoxelShadows(vec3 shadowSpaceCoord, vec3 staticWorldSpace, float phongMask)
     return vec3(test);
 }
 
-vec3 ShadowPass(vec3 worldPos, float phongMask, float translucents)
+vec3 ShadowPass(vec3 worldPos, float translucents)
 {
     // Get shadow sample coordinates
     
@@ -420,15 +422,15 @@ vec3 ShadowPass(vec3 worldPos, float phongMask, float translucents)
     #if MAX_SHADOW_BLUR == 0
         vec3 shadowPass = SampleShadow(shadowSpace);
     #elif SHADOW_MODE == 0 // PCF
-        vec3 shadowPass = ShadowFilter(shadowSpace, phongMask, translucents);
+        vec3 shadowPass = ShadowFilter(shadowSpace, translucents);
     #elif SHADOW_MODE == 1 // VSM
         vec3 shadowPass = vec3(SampleVSM(shadowSpace));
     #elif SHADOW_MODE == 2 // Voxel shadows
-        vec3 shadowPass = VoxelShadows(shadowSpace, worldPos + cameraPosition, phongMask);
+        vec3 shadowPass = VoxelShadows(shadowSpace, worldPos + cameraPosition);
     #endif
 
     // return vec3(worldToShadowUp);
-    return min(shadowPass, vec3(phongMask));
+    return shadowPass;
 }
 
 /// Fog ---------------------------------------------------
@@ -527,9 +529,9 @@ void main()
     vec3 normalOff = vec3(0.);
     if (waterAndIce > 0.)
     {
-        normalOff += (texture2D(colortex9, worldStatic.xz * .1 + frameCounter * .0005).rgb * 2. - 1.) * .3;
-        normalOff += (texture2D(colortex9, worldStatic.xz * 1.5 + frameCounter * .0003).rgb * 2. - 1.) * .3;
-        normalOff += texture2D(colortex9, worldStatic.xz * .02 + frameCounter * .0003).rgb * 2. - 1.;
+        normalOff += (texture2D(colortex9, worldStatic.xz * .1 + frameTimeCounter * .025).rgb * 2. - 1.) * .3;
+        normalOff += (texture2D(colortex9, worldStatic.xz * 1.5 + frameTimeCounter * .015).rgb * 2. - 1.) * .3;
+        normalOff += texture2D(colortex9, worldStatic.xz * .02 + frameTimeCounter * .015).rgb * 2. - 1.;
         normalTex += normalOff * .008;
         normalTex = clamp(normalTex, vec3(0.), vec3(1.));
     }
@@ -599,15 +601,16 @@ void main()
     #ifdef SHADOW_MAPPING
 
         float phongDiffuse = max(dot(viewNormal, shadowLightPosition * .01), 0.);
-        phongDiffuse = mix(phongDiffuse, 1., transparentPass.a); // Make glass not totaly broken
-        float phongMask = mix(phongDiffuse, .8, translucents); // Grass ignores Phong diffuse
+        // phongDiffuse = mix(phongDiffuse, max(phongDiffuse, .4), transparentPass.a); // Make glass not overly dark
+        phongDiffuse = mix(phongDiffuse, .8, translucents); // Grass ignores Phong diffuse
         vec3 worldSampleCoord = worldNoTrans + worldNormals * NORMAL_BIAS;
         vec3 diffuse = vec3(1.);
 
-        if (phongMask > 0. && waterMask == 0.) // Skip processing shadows on water
-            diffuse = ShadowPass(worldSampleCoord, phongMask, translucents);
-        else diffuse = vec3(phongMask);
+        if (phongDiffuse > 0. && waterMask == 0.) // Skip processing shadows on water
+            diffuse = ShadowPass(worldSampleCoord, translucents);
 
+        diffuse *= phongDiffuse;
+        
     #endif
 
     // Ambient light
@@ -634,7 +637,7 @@ void main()
 
     // Height based fog
     float worldXZperlin = texture2D(colortex9, fract(worldStatic.xz * .003)).r + .3;
-    float worldYperlin = texture2D(colortex9, fract(worldStatic.xz * .003) + frameCounter * .0001).g + .3;
+    float worldYperlin = texture2D(colortex9, fract(worldStatic.xz * .003) + frameTimeCounter * .01).g + .3;
     float fogHeightMult = clamp(pow(-world.y * .01, 1.5), 0., .7) * step(world.y, 0); // not in 0-1 range
     fogHeightMult *= mix(1., worldXZperlin * worldYperlin, 1.);
     fogHeightMult = mix(fogHeightMult * .2, fogHeightMult, smoothstep(.0, .25, lightmap.y + waterAndIce) * eyeSkyBrightnessFac); // Attenuate fog when not under skylight
@@ -757,7 +760,7 @@ void main()
     // col = vec3(texture2D(noisetex, uv * SCREEN_SIZE / BLUE_NOISE_SIZE).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(texture2D(shadowtex0, uv).rrr));
+        col = viewLayer(col, texCoord, vec3(diffuse));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

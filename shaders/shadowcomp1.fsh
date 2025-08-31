@@ -7,14 +7,15 @@ varying vec2 texCoord;
 
 // Built-in textures
 uniform sampler2D shadowtex0;
+uniform sampler2D shadowcolor0;
 
 // --------------------------------------------------------
 
 void main()
 {
-#if SHADOW_MODE == 1
-
     vec2 uv = texCoord;
+
+#if SHADOW_MODE == 1
 
     // VSM -------------------------------------------------------
     float shadowDepth = texture2D(shadowtex0, uv).r;
@@ -25,6 +26,10 @@ void main()
     float shadowDepthSquare = shadowDepth * shadowDepth;
 
     gl_FragData[0] = vec4(shadowDepth, shadowDepthSquare, 0., 1.);
+
+#else
+
+    gl_FragData[0] = texture2D(shadowcolor0, uv); // Has to be here for some reason
 
 #endif
 }

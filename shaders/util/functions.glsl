@@ -55,6 +55,12 @@ vec3 desaturate(vec3 col, float fac)
     return mix(col, vec3(lum), fac);
 }
 
+vec3 saturation(vec3 col, float fac)
+{
+    float lum = colToLum(col);
+    return clamp(mix(vec3(lum), col, fac), 0., 99999.);
+}
+
 // Other
 
 // Stolen from RRE36

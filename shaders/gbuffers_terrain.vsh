@@ -15,7 +15,8 @@ varying vec2 lightmapCoords;
 uniform mat4 gbufferModelView;
 uniform mat4 gbufferModelViewInverse;
 
-uniform sampler2D colortex10;    // Perlin Noise
+uniform sampler2D shadowtex0;   // Shadow space depth
+uniform sampler2D colortex10;   // Perlin Noise
 
 // uniform int frameCounter;
 uniform float frameTimeCounter;
@@ -24,6 +25,7 @@ uniform ivec2 atlasSize;
 
 void main()
 {
+    // NDC -> World
     vec4 vertexPos = gbufferModelViewInverse * gl_ModelViewMatrix * gl_Vertex;
     vec3 pos = vertexPos.xyz;
 
@@ -60,9 +62,9 @@ void main()
 
     /// Pass attributes post ----------------------------------
 
-    // Transform the vertex
-    // gl_Position = gl_ModelViewProjectionMatrix * vec4(pos, vertexPos.w);
+    // World -> NDC
     gl_Position = gl_ProjectionMatrix * gbufferModelView * vec4(pos, vertexPos.w);
+
     normal = gl_NormalMatrix * gl_Normal;
 
     lightmapCoords = mat2(gl_TextureMatrix[1]) * gl_MultiTexCoord1.st;
