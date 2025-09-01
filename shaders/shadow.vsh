@@ -15,6 +15,7 @@ uniform mat4 shadowModelView;
 void main()
 {
     gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * gl_Vertex;
+    // gl_Position = vec4(0.);
     
     vec3 worldToShadowUp = normalize((shadowModelView * vec4(0., 1., 0., 0.)).xyz);
     ShadowDistortion(gl_Position.xyz, worldToShadowUp);

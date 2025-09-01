@@ -1,5 +1,8 @@
 #version 330 compatibility
 
+#include "distort.glsl"
+#include "util/functions.glsl"
+
 // Attributes
 
 varying vec2 mc_Entity;
@@ -15,7 +18,7 @@ varying vec2 lightmapCoords;
 uniform mat4 gbufferModelView;
 uniform mat4 gbufferModelViewInverse;
 
-uniform sampler2D shadowtex0;   // Shadow space depth
+uniform sampler2DShadow shadowtex1;   // Shadow space depth
 uniform sampler2D colortex10;   // Perlin Noise
 
 // uniform int frameCounter;
@@ -23,8 +26,15 @@ uniform float frameTimeCounter;
 uniform vec3 cameraPosition;
 uniform ivec2 atlasSize;
 
+uniform mat4 shadowModelView;
+uniform mat4 shadowProjection;
+
+#define NORMAL_BIAS .01;
+
 void main()
 {
+    normal = gl_NormalMatrix * gl_Normal;
+
     // NDC -> World
     vec4 vertexPos = gbufferModelViewInverse * gl_ModelViewMatrix * gl_Vertex;
     vec3 pos = vertexPos.xyz;
@@ -60,15 +70,30 @@ void main()
     
     // color = vec4(vec3(grassHeightMask), 1.);
 
+    /// Shadow -----------------------------------------------
+
+    // vec3 shadowView = (shadowModelView * vec4(pos, 1.)).xyz;
+    // vec3 shadowSpace = projectAndDivide(shadowProjection, shadowView);
+
+    // vec3 worldToShadowUp = normalize((shadowModelView * vec4(0., 1., 0., 0.)).xyz);
+    // ShadowDistortion(shadowSpace, worldToShadowUp);
+
+    // // Convert from NDC to screenspace
+    // shadowSpace = shadowSpace * .5 + .5;
+
+    // vec3 shadowSampleCoord = shadowSpace + gl_Normal * NORMAL_BIAS;
+
+    // // Sample shadow
+    // float diffuse = shadow2D(shadowtex1, shadowSampleCoord).r;
+
     /// Pass attributes post ----------------------------------
 
     // World -> NDC
     gl_Position = gl_ProjectionMatrix * gbufferModelView * vec4(pos, vertexPos.w);
 
-    normal = gl_NormalMatrix * gl_Normal;
-
     lightmapCoords = mat2(gl_TextureMatrix[1]) * gl_MultiTexCoord1.st;
     lightmapCoords = (lightmapCoords * 33.05 / 32.) - (1.05 /32.);
+    // lightmapCoords = vec2(diffuse);
 
     entityID = mc_Entity;
 }

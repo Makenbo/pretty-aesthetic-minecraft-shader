@@ -20,11 +20,10 @@ void main()
     float waterAndIce = floor(entityID.x + .5) == 20 || floor(entityID.x + .5) == 21 ? 1. : 0.;
 
     /* RENDERTARGETS:0,1,2,3,4,11 */
-    gl_FragData[0] += albedo * (1. - waterAndIce);
+    // gl_FragData[0] += albedo * (1. - waterAndIce);
     if (waterAndIce > .001) gl_FragData[1] = vec4(normal * .5 + .5, 1.);
     // gl_FragData[2] = vec4(lightmapCoords, 0., 1.);
     gl_FragData[3] = vec4(entityID / 10000., 0., 1.);
-    gl_FragData[4] = color;
-    gl_FragData[5] = vec4(albedo.rgb, 1.);
-    // gl_FragData[5] = vec4(albedo.rgb * (lightmapCoords.x + lightmapCoords.y), albedo.a * waterAndIce);
+    gl_FragData[4] = vec4(color.rgb, 0.);
+    gl_FragData[5] = albedo;
 }

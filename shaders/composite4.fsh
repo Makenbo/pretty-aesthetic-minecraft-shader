@@ -47,6 +47,7 @@ const float undergroundFogDim = .2;
     const bool shadowHardwareFiltering1 = true; // Built-in
 #endif
 const float NORMAL_BIAS = .2 / (shadowMapResolution/1024.);
+const float shadowIntervalSize = 10.; // built-in
 
 // Ambient occlusion
 const float ambientOcclusionLevel = 1.;
@@ -73,7 +74,7 @@ uniform sampler2D colortex3;    // blocks ids
 uniform sampler2D colortex4;    // vertex color (biome color)
 uniform sampler2D colortex11;   // water layer
 uniform sampler2D colortex12;   // sky layer
-uniform sampler2D colortex14;   // VSM shadow layer
+uniform sampler2D colortex14;   // transparent objects overlay
 
 /*
 const int colortex0Format = RGBA8;
@@ -489,8 +490,8 @@ void main()
     float depth = texture2D(depthtex0, uv).r;
     float depthNoTrans = texture2D(depthtex1, uv).r;
 
-    vec4 transparentPass = texture2D(colortex11, uv);
-    // transparentPass.a = min(transparentPass.a*999., 1.); // Don't ask
+    vec4 unlit = texture2D(colortex11, uv);
+    // unlit.a = min(unlit.a*999., 1.); // Don't ask
     vec4 skyPass = texture2D(colortex12, uv);
     skyPass.rgb = pow(skyPass.rgb, vec3(2.2));
 
@@ -518,9 +519,9 @@ void main()
     float entities = mat == 100 ? 1. : 0.;
     float waterMask = mat == 20 ? 1. : 0.;
     float iceMask = mat == 21 ? 1. : 0.;
-    biomeCol = mix(biomeCol, transparentPass.rgb * ICE_DEPTH_COL, iceMask);
+    biomeCol = mix(biomeCol, unlit.rgb * ICE_DEPTH_COL, iceMask);
     float waterAndIce = waterMask + iceMask;
-    // waterMask = mix(waterMask, 1. - waterMask, isEyeInWater);
+    float glass = mat == 50 ? 1. : 0.;
 
     #ifndef ROUND_BLOCKS
         vec3 normalTex = texture2D(colortex1, uv).rgb;
@@ -551,7 +552,7 @@ void main()
     vanillaAO = mix(vanillaAO, 1., waterAndIce * .1); // Tone down AO under water
 
     // Normalize vanilla AO to not have vanilla sunlight (not needed in Iris)
-        // float opaqueObjects = 1. - min(grass + transparentPass.a + entities, 1.);
+        // float opaqueObjects = 1. - min(grass + unlit.a + entities, 1.);
         // normalizeVanillaAO(vanillaAO, worldNormals, opaqueObjects);
 
     // Eye brightness
@@ -579,7 +580,7 @@ void main()
     shadowsFac *= 1. - lightSourceTransitionMask;
     shadowsFac = mix(shadowsFac, 0., noonDimFac * .4);
     shadowsFac = max(shadowsFac - (float(isEyeInWater) * 1.), 0.);
-    // shadowsFac = max(shadowsFac - transparentPass.a, 0.);
+    // shadowsFac = max(shadowsFac - unlit.a, 0.);
 
     #ifndef SHADOW_MAPPING
         shadowsFac = 0.;
@@ -609,7 +610,7 @@ void main()
     #ifdef SHADOW_MAPPING
 
         float phongDiffuse = max(dot(viewNormal, shadowLightPosition * .01), 0.);
-        // phongDiffuse = mix(phongDiffuse, max(phongDiffuse, .4), transparentPass.a); // Make glass not overly dark
+        // phongDiffuse = mix(phongDiffuse, max(phongDiffuse, .4), unlit.a); // Make glass not overly dark
         phongDiffuse = mix(phongDiffuse, .8, translucents); // Grass ignores Phong diffuse
         vec3 worldSampleCoord = worldNoTrans + worldNormals * NORMAL_BIAS;
 
@@ -665,7 +666,7 @@ void main()
     float fogLuma = dot(fogCol, vec3(.2126, .7152, .0722));
 
     // Get factor
-    float fogDepth = mix(viewDepthNoTrans / far, viewDepth / far, waterMask);
+    float fogDepth = mix(viewDepth / far, viewDepthNoTrans / far, glass);
     float underwaterFogDepth = (viewDepthNoTrans - viewDepth) / far; // To get smoother fog transition on water surface (unneccessary in Iris I think)
     float densityInv = mix(FOG_DENSITY_INV, NIGHT_VISION_FOG_DENSITY_INV, nightVision);
     float fogFac = pow(fogDepth + underwaterFogDepth*0.0, densityInv);
@@ -708,15 +709,15 @@ void main()
     // col = mix(col, col * (worldNormals * .25 + .875), 1. - min(sunlight, 1.));
 
     // Water fog ------------------------------------------------------
-    // col = mix(col, col * waterTint * 2., waterAndIce * (1.-isEyeInWater)); // Water blue-ish tint
+    col = mix(col, col * waterTint * 2., waterAndIce * (1.-isEyeInWater)); // Water blue-ish tint
     // col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
-    vec3 waterSurfaceCol = transparentPass.rgb;
+    vec3 waterSurfaceCol = unlit.rgb;
     waterSurfaceCol = mix(waterSurfaceCol, desaturate(waterSurfaceCol, 1.) * 1.5, waterMask);
     waterSurfaceCol = mix(waterSurfaceCol, desaturate(max(waterSurfaceCol * 2. - .5, 0.), 0.), iceMask); // Brighten up ice
     // waterSurfaceCol += lightmapCol * .7; // Add a bit of underwater light
-    // col = mix(col, col * waterSurfaceCol, waterAndIce); // Draw water surface
-    vec3 additiveSurfaceCol = transparentPass.rgb;
-    // col = mix(col, col + additiveSurfaceCol * .02, iceMask); // Make ice texture more visible
+    col = mix(col, col * waterSurfaceCol, waterAndIce); // Draw water surface
+    vec3 additiveSurfaceCol = unlit.rgb;
+    col = mix(col, col + additiveSurfaceCol * .02, iceMask); // Make ice texture more visible
 
     // Add sky reflection if no SSR --------------------------
     float fresnel = GetWaterFresnel(view, viewNormal);
@@ -727,8 +728,8 @@ void main()
     #endif
 
     // Subtle block reflections at night
-    // col += skyReflection * (1.-transparentPass.a) * fresnel * eyeSkyBrightnessFac * lightSourceTransitionMask * 1.;
-    // col += skyDiffuseRefl * (1.-transparentPass.a) * eyeSkyBrightnessFac * .05;
+    // col += skyReflection * (1.-unlit.a) * fresnel * eyeSkyBrightnessFac * lightSourceTransitionMask * 1.;
+    // col += skyDiffuseRefl * (1.-unlit.a) * eyeSkyBrightnessFac * .05;
 
 
     // Apply fog -----------------------------------------------------------
@@ -736,7 +737,7 @@ void main()
     // Darken when bright fog
     col = mix(col, col * .2, vec3(fogFac) * underwaterMult * length(fogColor));
     // Overworld fog
-    col = mix(col, fogCol, vec3(fogFac) * underwaterMult);
+    col = mix(col, fogColor, vec3(fogFac) * underwaterMult);
 
     // Sky ----------------------------------------------------------
 
@@ -752,6 +753,10 @@ void main()
     col = mix(col, skyAlbedo, skyMask); // Seperate the sky
     col = mix(col, col + albedo * 2., skyMask);
 
+    // Draw transparent objects -------------------------------------
+
+    col = mix(col, unlit.rgb, max(unlit.a - waterAndIce, 0.));
+
     // Prepare luma mask for local tone mapping ----------------------------------
 
     float lumMask = dot(col, vec3(.2126, .7152, .0722)); // Convert to black and white
@@ -764,12 +769,12 @@ void main()
 
     // Debug --------------------------------------------------------
 
-    // col = texture2D(colortex3, uv).rgb;
+    // col = vec3(lightmap.x);
     // col = texture2D(shadowtex0, uv).rrr;
     // col = vec3(texture2D(noisetex, uv * SCREEN_SIZE / BLUE_NOISE_SIZE).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(waterFogFac));
+        col = viewLayer(col, texCoord, vec3(fogFac));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
