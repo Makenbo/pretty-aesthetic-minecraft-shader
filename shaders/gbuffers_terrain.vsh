@@ -50,9 +50,16 @@ void main()
     /// Wind ----------------------------------------------
 
     vec3 worldPos = pos + cameraPosition.xyz;
-    vec2 sampleUV = fract(worldPos.xz * .1) + vec2(frameTimeCounter * .18, 0.);
-    vec3 off = texture2D(colortex10, sampleUV).rgb * 2. - 1.;
-    off *= vec3(.2, .1, .2);
+    vec2 sampleUV = fract(worldPos.xz * .05) + fract(worldPos.y * .02) + vec2(frameTimeCounter * .2, 0.);
+    vec3 offLowFreq = texture2D(colortex10, sampleUV).rgb * 2. - 1.;
+    offLowFreq *= .2 * vec3(1., .5, 1.);
+
+    sampleUV = fract(worldPos.xz * .11) + fract(worldPos.y * .021) + vec2(frameTimeCounter * .5, 0.);
+    vec3 offHighFreq = texture2D(colortex10, sampleUV).rgb * 2. - 1.;
+    offHighFreq *= .05 * vec3(1., .5, 1.);
+    offHighFreq *= 0.;
+
+    vec3 off = offLowFreq + offHighFreq;
     // vec2 wave = sin((worldPos.xz + worldPos.zx) * .05 + frameTimeCounter * 1.5);
     // wave = pow(max(wave - .5, 0.), vec2(2.));
     // wave *= vec2(.05, .1) * 5.;

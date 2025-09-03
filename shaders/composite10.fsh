@@ -16,10 +16,13 @@ varying vec2 texCoord;
 // uniform sampler2D depthtex0;
 uniform sampler2D colortex6; // Luma mask to downscale
 uniform sampler2D colortex9; // Blocklight color to downscale
+uniform sampler2D colortex14; // Lighting
 
 /*
 const int colortex6Format = R8;
 const int colortex9Format = RGB8;
+const int colortex14Format = RGB16F;
+const int colortex15Format = RGB16F;
 */
 
 uniform mat4 gbufferProjectionInverse;
@@ -27,7 +30,7 @@ uniform mat4 gbufferProjectionInverse;
 
 void main()
 {
-    /* RENDERTARGETS:7,10 */
+    /* RENDERTARGETS:7,10,15 */
 
     #ifdef LOCAL_TONE_MAPPING
         float lumMask = texture2D(colortex6, texCoord).r;
@@ -36,4 +39,7 @@ void main()
 
     // vec3 blocklightMask = texture2D(colortex9, texCoord).rgb;
     // gl_FragData[1] = vec4(blocklightMask, 1.);
+
+    vec3 lighting = texture2D(colortex14, texCoord).rgb;
+    gl_FragData[2] = vec4(lighting, 1.);
 }

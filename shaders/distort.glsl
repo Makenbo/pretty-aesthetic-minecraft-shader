@@ -31,10 +31,10 @@ void ShadowDistortion(inout vec3 position, vec3 worldToShadowUp)
     // Higher resolution near player
     vec3 distortFac = vec3(1.);
     distortFac.xy = vec2(mix(1., length(position.xy), .8));
+    // distortFac.xy = vec2(mix(1., length(position.xy), .1));
 
     // Higher shadow render distance
-    position.z *= 1.05; // Stuff in the fog doesn't get shadows, increase this number
-                        // for higher render distances, for example 1.2 with 17 chunks without the fog
+    position.z *= .85;
 
     // Higher precision near player
     distortFac.z = mix(1., length(position.z), .8);

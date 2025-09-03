@@ -4,7 +4,6 @@
 
 #version 330 compatibility
 
-// #include "util/constants.glsl"
 #include "shader_settings.glsl"
 #include "util/functions.glsl"
 
@@ -19,6 +18,7 @@ varying vec2 texCoord;
 
 uniform sampler2D colortex7;     // Low res luma mask to blur
 uniform sampler2D colortex10;    // Low res blocklight mask to blur
+uniform sampler2D colortex15;    // Lighting
 uniform sampler2D colortex8;     // full res corrected depth
 
 /*
@@ -34,7 +34,7 @@ void main()
 {
     float texSize = (1. / viewHeight) * (1. / DOWNRES_FAC);
     
-    /* RENDERTARGETS:7,10 */
+    /* RENDERTARGETS:7,10,15 */
 
     #ifdef LOCAL_TONE_MAPPING
         float lum = GaussDepthBlur1f(colortex7, colortex8, texCoord, texSize, BLUR_DIR);
@@ -43,4 +43,7 @@ void main()
 
     // vec3 blockCol = GaussBlur3f(colortex10, texCoord, texSize, BLUR_DIR);
     // gl_FragData[1] = vec4(blockCol, 1.);
+
+    vec3 lighting = GaussDepthBlur3f(colortex15, colortex8, texCoord, texSize, BLUR_DIR);
+    gl_FragData[2] = vec4(lighting, 1.);
 }

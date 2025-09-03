@@ -21,6 +21,11 @@ float linstep(float minimum, float maximum, float v)
     return clamp((v - minimum) / (maximum - minimum), 0, 1);
 }
 
+float MapRange(float value, float oldMin, float oldMax, float newMin, float newMax)
+{
+    return newMin + (value - oldMin) * (newMax - newMin) / (oldMax - oldMin);
+}
+
 mat2 rotationMat2D(float angle)
 {
     float cosAngle = cos(angle);
@@ -98,7 +103,6 @@ float GaussDepthBlur1f(sampler2D lumTex, sampler2D depthTex, vec2 uv, float texS
         float myDepth = texture2D(depthTex, uv + off).r;
         float depthDiff = abs(depthCenter - myDepth);
         float closeEnough = depthDiff < depthMarginScaled ? 1. : 0.;
-        // closeEnough = 0.;
         lum += texture2D(lumTex, uv + off).r * gauss9[int(abs(i))] * closeEnough;
         weightSum += gauss9[int(abs(i))] * closeEnough;
     }
@@ -106,24 +110,28 @@ float GaussDepthBlur1f(sampler2D lumTex, sampler2D depthTex, vec2 uv, float texS
     return lum / weightSum;
 }
 
-// vec3 GaussDepthBlur3f(sampler2D colTex, sampler2D depthTex, vec2 uv, float texSize, ivec2 blurDir)
-// {
-//     float depthCenter = texture2D(depthTex, uv).r;
-//     vec3 col = vec3(0.);
-//     float weightSum = 0.;
+vec3 GaussDepthBlur3f(sampler2D lumTex, sampler2D depthTex, vec2 uv, float texSize, ivec2 blurDir)
+{
+    float depthCenter = texture2D(depthTex, uv).r;
+    vec3 col = vec3(0.);
+    vec3 weightSum = vec3(0.);
+    // float depthMarginScaled = DEPTH_MARGIN * mix(depthCenter, 1., step(depthCenter, 999.));
+    float depthMarginScaled = DEPTH_MARGIN_CLOSE * depthCenter;
 
-//     for (int i = -8; i < 9; i++)
-//     {
-//         vec2 off = texSize * blurDir * (i * 2. - .5);
-//         float myDepth = texture2D(depthTex, uv + off).r;
-//         float depthDiff = depthCenter - myDepth;
-//         float closeEnough = depthDiff < DEPTH_MARGIN ? 1. : 0.;
-//         col += texture2D(colTex, uv + off).rgb * gauss9[abs(i)] * closeEnough;
-//         weightSum += gauss9[abs(i)] * closeEnough;
-//     }
+    for (int i = -8; i < 9; i++)
+    {
+        vec2 off = texSize * blurDir * (i * 2. - .5);
+        // vec2 off = texSize * blurDir * i;
+        float myDepth = texture2D(depthTex, uv + off).r;
+        float depthDiff = abs(depthCenter - myDepth);
+        float closeEnough = depthDiff < depthMarginScaled ? 1. : 0.;
+        col += texture2D(lumTex, uv + off).rgb * gauss9[int(abs(i))] * closeEnough;
+        weightSum += gauss9[int(abs(i))] * closeEnough;
+    }
+    weightSum -= .00001;
 
-//     return col / weightSum;
-// }
+    return col / weightSum;
+}
 
 vec3 GaussBlur3f(sampler2D colTex, vec2 uv, float texSize, ivec2 blurDir)
 {

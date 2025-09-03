@@ -19,6 +19,7 @@ uniform sampler2D colortex3;    // Entity ID
 uniform sampler2D colortex5;    // Linear render
 uniform sampler2D colortex7;    // Blurred luma
 uniform sampler2D colortex10;    // Blurred blocklight
+uniform sampler2D colortex15;    // Blurred lighting
 
 /*
 const int colortex5Format = RGB16F;
@@ -52,9 +53,12 @@ void main()
     // Lookup passes -----------------------------------------------
 
     vec3 col = texture2D(colortex5, uv).rgb;
+    vec3 lighting = texture2D(colortex15, uv).rgb;
+
+    // col *= lighting;
+    // col *= 6.;
 
     // Local tone mapping --------------------------------------------------------
-
 
     #ifdef LOCAL_TONE_MAPPING
         float lumMask = texture2D(colortex7, uv).r;
