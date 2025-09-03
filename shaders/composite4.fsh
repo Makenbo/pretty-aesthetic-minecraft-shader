@@ -282,18 +282,6 @@ float ShadowDistance(vec3 pos, float shadowDistScalar, mat2 rndRot, float blurMu
     return shadowDist;
 }
 
-float ShadowSSS(vec3 shadowCoord)
-{
-    // Shadow masks
-    float shadowDist = SampleShadowDist(shadowCoord, .03);
-
-    float shadow = shadowDist > .001 ? 1. : 0.;
-    float shadowNoTransp = shadow2D(shadowtex1, shadowCoord).x;
-    float transparentObjects = shadowNoTransp - shadow;
-    
-    return shadowDist;
-}
-
 vec3 ShadowFilter(vec3 shadowCoord, float shadowDistScalar, float translucents)
 {
     // Randomize angle of sample offset
@@ -304,7 +292,10 @@ vec3 ShadowFilter(vec3 shadowCoord, float shadowDistScalar, float translucents)
 
     // Calculate distance to the occluder
     float blurScale = MAX_SHADOW_BLUR;
-    blurScale = mix(blurScale, 15., translucents);
+
+    #ifdef SUBSURFACE_SCATTERING
+        blurScale = mix(blurScale, 15., translucents); // Fake SSS
+    #endif
 
     #ifdef VARIABLE_PENUMBRA
         float shadowBlocker = ShadowDistance(shadowCoord, shadowDistScalar, rndRot, 1.);
@@ -313,9 +304,6 @@ vec3 ShadowFilter(vec3 shadowCoord, float shadowDistScalar, float translucents)
 
         // float fakeGI = GetFakeGI(shadowBlocker, skyDiffuse);
     #endif
-
-    // SSS
-    float SSS = ShadowSSS(shadowCoord);
 
     // Get relative shadow bias
     // float shadowBias = pow(smoothstep(1.8, 0., texelSize.z), 4.) * 40. + 1.;
@@ -344,8 +332,6 @@ vec3 ShadowFilter(vec3 shadowCoord, float shadowDistScalar, float translucents)
         }
         result /= SHADOW_FILTER_SAMPLES;
     }
-
-    // result = mix(result, (result + SSS) * .7, translucents); // Add SSS
 
     // return vec3(lod);
     // return vec3(shadowBlocker);
@@ -810,5 +796,5 @@ void main()
     #if defined SKY_REFLECTIONS && defined SSR
         gl_FragData[5] = vec4(skyReflection, fogFac) * waterAndIce; // Sky reflections for SSR
     #endif
-    gl_FragData[6] = vec4(lightingNoAlbedo / 6., 1.); // Blurred lighting
+    // gl_FragData[6] = vec4(lightingNoAlbedo / 6., 1.); // Blurred lighting
 }

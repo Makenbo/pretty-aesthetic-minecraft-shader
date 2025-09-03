@@ -40,6 +40,6 @@ void main()
     // vec3 blockCol = GaussBlur3f(colortex10, texCoord, texSize, BLUR_DIR);
     // gl_FragData[1] = vec4(blockCol, 1.);
 
-    vec3 lighting = GaussDepthBlur3f(colortex15, colortex8, texCoord, texSize, BLUR_DIR);
-    gl_FragData[2] = vec4(lighting, 1.);
+    // vec3 lighting = GaussDepthBlur3f(colortex15, colortex8, texCoord, texSize, BLUR_DIR);
+    // gl_FragData[2] = vec4(lighting, 1.);
 }
