@@ -710,7 +710,7 @@ void main()
 
     // Water fog ------------------------------------------------------
     col = mix(col, col * waterTint * 2., waterAndIce * (1.-isEyeInWater)); // Water blue-ish tint
-    // col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
+    col = mix(col, waterFogCol * .2, waterFogFac); // "Light absorption"
     vec3 waterSurfaceCol = unlit.rgb;
     waterSurfaceCol = mix(waterSurfaceCol, desaturate(waterSurfaceCol, 1.) * 1.5, waterMask);
     waterSurfaceCol = mix(waterSurfaceCol, desaturate(max(waterSurfaceCol * 2. - .5, 0.), 0.), iceMask); // Brighten up ice
@@ -735,9 +735,9 @@ void main()
     // Apply fog -----------------------------------------------------------
     float underwaterMult = min((1. - isEyeInWater), 1.); // Attenuate effect under water
     // Darken when bright fog
-    col = mix(col, col * .2, vec3(fogFac) * underwaterMult * length(fogColor));
+    col = mix(col, col * .2, vec3(fogFac) * underwaterMult * length(fogCol));
     // Overworld fog
-    col = mix(col, fogColor, vec3(fogFac) * underwaterMult);
+    col = mix(col, fogCol, vec3(fogFac) * underwaterMult);
 
     // Sky ----------------------------------------------------------
 
@@ -774,7 +774,7 @@ void main()
     // col = vec3(texture2D(noisetex, uv * SCREEN_SIZE / BLUE_NOISE_SIZE).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(fogFac));
+        col = viewLayer(col, texCoord, vec3(vertexCol.rgb));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

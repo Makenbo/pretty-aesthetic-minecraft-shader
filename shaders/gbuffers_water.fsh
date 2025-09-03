@@ -15,7 +15,7 @@ uniform sampler2D lightmap;
 
 void main()
 {
-    vec4 albedo = texture2D(texture, texCoords /*- vec2(1./1024.*16.)*/);// * vec4(color.rgb, 1.) * color.a;
+    vec4 albedo = texture2D(texture, texCoords);// * vec4(color.rgb, 1.) * color.a;
     // albedo *= lightmapCoords.x + lightmapCoords.y; // Bake light map to albedo
     float waterAndIce = floor(entityID.x + .5) == 20 || floor(entityID.x + .5) == 21 ? 1. : 0.;
 
@@ -24,6 +24,6 @@ void main()
     if (waterAndIce > .001) gl_FragData[1] = vec4(normal * .5 + .5, 1.);
     // gl_FragData[2] = vec4(lightmapCoords, 0., 1.);
     gl_FragData[3] = vec4(entityID / 10000., 0., 1.);
-    gl_FragData[4] = vec4(color.rgb, 0.);
+    gl_FragData[4] = vec4(color.rgb, 1.);
     gl_FragData[5] = albedo;
 }
