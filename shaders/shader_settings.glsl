@@ -20,6 +20,7 @@ const int shadowMapResolution = 2560; // [512 1024 1536 2048 2560 3072 4096]
 #define LUT // Apply a color grading filter. Basically zero perfomance impact.
 #define LOCAL_TONE_MAPPING // Makes shadows brighter, but in a pretty way. Small performance impact. Rarely might cause light leaking artifacts.
 #define VIGNETTE // Makes the screen darker closer to the edge.
+#define BLOOM
 
 // Debug
 

@@ -5,6 +5,7 @@
 #version 330 compatibility
 
 #include "util/functions.glsl"
+#include "util/post_col.glsl"
 #include "shader_settings.glsl"
 
 /// Attributes -------------------------------------------------------

@@ -18,7 +18,7 @@ uniform sampler2D texture;  // The texture atlas
 void main()
 {
     // Sample from texture atlas and account for biome color + ambient occlusion
-    vec4 albedo = texture2D(texture, texCoords /*- vec2(1./1024.*16.)*/) * color;
+    vec4 albedo = texture2D(texture, texCoords /*- vec2(1./1024.*16.)*/);
 
     /* RENDERTARGETS:0,1,2,3,4 */
     gl_FragData[0] = vec4(albedo.rgb * color.rgb, albedo.a);

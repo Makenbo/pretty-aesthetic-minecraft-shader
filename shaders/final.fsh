@@ -1,6 +1,7 @@
 #version 330 compatibility
 
 #include "shader_settings.glsl"
+#include "util/functions.glsl"
 #include "util/post_col.glsl"
 #include "debug/debug_view.glsl"
 
@@ -18,8 +19,7 @@ varying vec2 texCoord;
 uniform sampler2D colortex3;    // Entity ID
 uniform sampler2D colortex5;    // Linear render
 uniform sampler2D colortex7;    // Blurred luma
-uniform sampler2D colortex10;    // Blurred blocklight
-uniform sampler2D colortex15;    // Blurred lighting
+uniform sampler2D colortex10;   // Bloom buffer
 
 /*
 const int colortex5Format = RGB16F;
@@ -30,6 +30,8 @@ uniform sampler2D depthtex2;    // LUT
 /// State uniforms -----------------------------------------------
 
 uniform float nightVision;
+uniform float viewWidth;
+uniform float viewHeight;
 
 /// Overlays -----------------------------------------------
 
@@ -53,10 +55,15 @@ void main()
     // Lookup passes -----------------------------------------------
 
     vec3 col = texture2D(colortex5, uv).rgb;
-    vec3 lighting = texture2D(colortex15, uv).rgb;
 
-    // col *= lighting;
-    // col *= 6.;
+    // Bloom -----------------------------------------------
+
+    #ifdef BLOOM
+        // vec2 texSize = 1. / vec2(viewWidth, viewHeight) * 20.;
+        vec3 bloom = decompressBufferRange(texture2D(colortex10, uv).rgb);
+        col = mix(col, bloom, .25);
+        // col = bloom;
+    #endif
 
     // Local tone mapping --------------------------------------------------------
 
@@ -67,7 +74,7 @@ void main()
         float entityID = texture2D(colortex3, uv).r;
         int mat = int(entityID * 10000. + .5);
         float leaves = mat == 31 ? 1. : 0.;
-        lumMask *= 1. - leaves;
+        // lumMask *= 1. - leaves;
 
         float shadowMult = mix(LOCAL_SHADOW_MULT, LOCAL_SHADOW_MULT_NIGHT_VISION, nightVision);
         col = mix(col, col * shadowMult, lumMask);
@@ -95,7 +102,7 @@ void main()
 
     // Debug -------------------------------------------
 
-    // col = viewLayer(col, texCoord, vec3(lumMask));
+    // col = viewLayer(col, texCoord, vec3(ToDisplay(tonemap(bloom))));
     // col = vec3(lumMask);
 
     /* RENDERTARGETS:0 */

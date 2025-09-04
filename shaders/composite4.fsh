@@ -83,7 +83,6 @@ const int colortex3Format = R16;
 const int colortex4Format = RGBA8;
 const int colortex11Format = RGBA8;
 const int colortex12Format = RGBA16;
-const int colortex14Format = RGB8;
 */
 
 #if SHADOW_MODE == 1 // VSM
@@ -92,7 +91,6 @@ const int colortex14Format = RGB8;
 
 uniform sampler2D depthtex2;    // LUT
 uniform sampler2D colortex9;    // Perlin Noise
-// uniform sampler2D colortex10;   // Low frequency perlin
 
 // Built-in textures
 uniform sampler2D depthtex0;
@@ -619,7 +617,7 @@ void main()
         // float shadowDistScalar = MapRange(1. - sunHeight, .1, .8, 0., .5);
         // shadowDistScalar = max(shadowDistScalar, 0.);
 
-        if (phongDiffuse > 0. && waterMask == 0.) // Skip processing shadows on water
+        if (phongDiffuse > 0. && eyeSkyBrightnessFac > 0. && waterMask == 0.) // Skip processing shadows on water
             diffuse = ShadowPass(worldSampleCoord, .3, leaves);
 
         diffuse *= phongDiffuse;
@@ -766,15 +764,15 @@ void main()
 
     // Prepare luma mask for local tone mapping ----------------------------------
 
-    float lumMask = dot(col, vec3(.2126, .7152, .0722)); // Convert to black and white
+    float lumMask = colToLum(col); // Convert to black and white
     lumMask *= 4.; // Move gray very roughly closer to the middle gray
     lumMask = ReinhardtTonemap(lumMask); // Compress range, so 8-bit buffer would be enough
     lumMask = 1. - lumMask; // Make mask show the shadows
     lumMask = pow(lumMask, 20.);
-    lumMask = max(lumMask, 0.);
     lumMask = mix(lumMask, 0., min(leaves + skyMask, 1.)); // Ignore leaves and sky
+    lumMask = max(lumMask, 0.);
 
-    lightingNoAlbedo = mix(lightingNoAlbedo, vec3(1.), skyMask);
+    // lightingNoAlbedo = mix(lightingNoAlbedo, vec3(1.), skyMask);
 
     // Debug --------------------------------------------------------
 
@@ -783,10 +781,10 @@ void main()
     // col = vec3(texture2D(noisetex, uv * SCREEN_SIZE / BLUE_NOISE_SIZE).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(lightingNoAlbedo));
+        col = viewLayer(col, texCoord, vec3(fogFac));
     #endif
 
-    /* RENDERTARGETS:5,1,6,8,9,13,14 */
+    /* RENDERTARGETS:5,1,6,8,9,13 */
     gl_FragData[0] = vec4(col, 1.); // Linear high precision render
     gl_FragData[1] = vec4(normalTex, 1.); // Modify normals
     gl_FragData[2] = vec4(lumMask, 0., 0., 1.); // Luma mask for local tone mapping
@@ -796,5 +794,4 @@ void main()
     #if defined SKY_REFLECTIONS && defined SSR
         gl_FragData[5] = vec4(skyReflection, fogFac) * waterAndIce; // Sky reflections for SSR
     #endif
-    // gl_FragData[6] = vec4(lightingNoAlbedo / 6., 1.); // Blurred lighting
 }

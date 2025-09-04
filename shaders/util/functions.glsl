@@ -66,6 +66,15 @@ vec3 saturation(vec3 col, float fac)
     return clamp(mix(vec3(lum), col, fac), 0., 99999.);
 }
 
+vec3 compressBufferRange(vec3 col)
+{
+    return col / 10.;
+}
+vec3 decompressBufferRange(vec3 col)
+{
+    return col * 10.;
+}
+
 // Other
 
 // Stolen from RRE36
@@ -98,7 +107,7 @@ float GaussDepthBlur1f(sampler2D lumTex, sampler2D depthTex, vec2 uv, float texS
 
     for (int i = -8; i < 9; i++)
     {
-        vec2 off = texSize * blurDir * (i * 2. - .5);
+        vec2 off = texSize * blurDir * (i * 2. + .5);
         // vec2 off = texSize * blurDir * i;
         float myDepth = texture2D(depthTex, uv + off).r;
         float depthDiff = abs(depthCenter - myDepth);
@@ -120,7 +129,7 @@ vec3 GaussDepthBlur3f(sampler2D lumTex, sampler2D depthTex, vec2 uv, float texSi
 
     for (int i = -8; i < 9; i++)
     {
-        vec2 off = texSize * blurDir * (i * 2. - .5);
+        vec2 off = texSize * blurDir * (i * 2. + .5);
         // vec2 off = texSize * blurDir * i;
         float myDepth = texture2D(depthTex, uv + off).r;
         float depthDiff = abs(depthCenter - myDepth);
@@ -159,4 +168,33 @@ vec2 BoxBlur2f(sampler2D tex, vec2 uv, float texSize, int blurSize, ivec2 blurDi
     }
 
     return col / (blurSize * 2. + 1.);
+}
+
+vec3 MipMapBloom(sampler2D tex, vec2 uv, float texSize, ivec2 blurDir)
+{
+    vec3 result = vec3(0.);
+    float weightSum = 1.;
+
+    for (int i = 0; i <= 6; i++)        // Iterate mip levels
+    {
+        for (int j = -1; j <= 1; j++)   // Directional blur
+        {
+            float off = (j) * texSize * exp2(i);
+            off += (-.5 * texSize) + (.5 * texSize * exp2(i));  // Counter the pixel offset
+                                                                // Not sure if accurate but seems to work
+            vec3 sample = textureLod(tex, uv + (off * blurDir), i).rgb;
+
+            // float weight = 1 / (i+1.);
+            float weight = exp(-abs(off * 10.)); // DIY weight function
+            // float weight = 1.;
+
+            result += sample * weight;
+            weightSum += weight;
+        }
+    }
+
+    result /= weightSum;
+
+    return vec3(result);
+    // return vec3(1.);
 }

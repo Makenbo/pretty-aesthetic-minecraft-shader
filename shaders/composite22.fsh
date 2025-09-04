@@ -1,5 +1,6 @@
 /*
-    Post blurring - vertical blur
+    Bloom 2-pass blurring using multiple mip levels (2/2)
+        Vertical blur
 */
 
 #version 330 compatibility
@@ -7,8 +8,8 @@
 #include "shader_settings.glsl"
 #include "util/functions.glsl"
 
-#define DOWNRES_FAC .25
 const ivec2 BLUR_DIR = ivec2(0, 1);
+#define DOWNRES_FAC .25
 
 /// Attributes -------------------------------------------------------
 
@@ -16,13 +17,8 @@ varying vec2 texCoord;
 
 /// Custom textures -----------------------------------------------
 
-uniform sampler2D colortex7;     // Low res luma mask to blur
-uniform sampler2D colortex8;     // full res corrected depth
-
-/*
-const int colortex7Format = R8;
-const int colortex8Format = R16F;
-*/
+uniform sampler2D colortex10;
+const bool colortex10MipmapEnabled = true; // THIS OPTION ONLY WORKS FOR THE COMPOSITE IT IS LOCATED IN, I WILL TEAR MY HAIR OUT
 
 /// Uniforms -----------------------------------------------------
 
@@ -31,11 +27,10 @@ uniform float viewHeight;
 void main()
 {
     float texSize = (1. / viewHeight) * (1. / DOWNRES_FAC);
-    
-    /* RENDERTARGETS:7 */
+    // texSize *= .2; // I don't know what is hapenning
 
-    #ifdef LOCAL_TONE_MAPPING
-        float lum = GaussDepthBlur1f(colortex7, colortex8, texCoord, texSize, BLUR_DIR);
-        gl_FragData[0] = vec4(lum, 0., 0., 1.);
-    #endif
+    /* RENDERTARGETS:10 */
+    
+    vec3 bloom = MipMapBloom(colortex10, texCoord, texSize, BLUR_DIR);
+    gl_FragData[0] = vec4(bloom, 1.);
 }
