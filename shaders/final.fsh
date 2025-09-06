@@ -56,15 +56,6 @@ void main()
 
     vec3 col = texture2D(colortex5, uv).rgb;
 
-    // Bloom -----------------------------------------------
-
-    #ifdef BLOOM
-        // vec2 texSize = 1. / vec2(viewWidth, viewHeight) * 20.;
-        vec3 bloom = decompressBufferRange(texture2D(colortex10, uv).rgb);
-        col = mix(col, bloom, .25);
-        // col = bloom;
-    #endif
-
     // Local tone mapping --------------------------------------------------------
 
     #ifdef LOCAL_TONE_MAPPING
@@ -78,6 +69,15 @@ void main()
 
         float shadowMult = mix(LOCAL_SHADOW_MULT, LOCAL_SHADOW_MULT_NIGHT_VISION, nightVision);
         col = mix(col, col * shadowMult, lumMask);
+    #endif
+
+    // Bloom -----------------------------------------------
+
+    #ifdef BLOOM
+        // vec2 texSize = 1. / vec2(viewWidth, viewHeight) * 20.;
+        vec3 bloom = decompressBufferRange(texture2D(colortex10, uv).rgb);
+        col = mix(col, bloom, BLOOM_INTENSITY);
+        // col = bloom;
     #endif
 
     // Post --------------------------------------------------------

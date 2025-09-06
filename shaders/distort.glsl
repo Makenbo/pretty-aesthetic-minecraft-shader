@@ -26,7 +26,7 @@ float sigmoidCurve(float x)
     return ((sigmoid - .5) * 1.3) + (.3 * x);
 }
 
-void ShadowDistortion(inout vec3 position, vec3 worldToShadowUp)
+void ShadowDistortion(inout vec3 position, vec3 worldToShadowUp, float factor)
 {
     // Higher resolution near player
     vec3 distortFac = vec3(1.);
@@ -40,7 +40,7 @@ void ShadowDistortion(inout vec3 position, vec3 worldToShadowUp)
     distortFac.z = mix(1., length(position.z), .8);
     // position.z = sigmoidCurve(position.z);
     
-    position /= distortFac;
+    position /= mix(vec3(1.), distortFac, factor);
     // rotate2D(position.xy, 3.1415*2.);
     
     position = lookAtMat(worldToShadowUp) * position;

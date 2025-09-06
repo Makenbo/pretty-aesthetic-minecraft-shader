@@ -9,7 +9,6 @@
 #include "util/functions.glsl"
 
 const ivec2 BLUR_DIR = ivec2(1, 0);
-#define DOWNRES_FAC .25
 
 /// Attributes -------------------------------------------------------
 
@@ -27,10 +26,10 @@ uniform float viewWidth;
 
 void main()
 {
-    float texSize = (1. / viewWidth) * (1. / DOWNRES_FAC);
+    float texSize = (1. / viewWidth) * (1. / BLOOM_RESOLUTION);
 
     /* RENDERTARGETS:10 */
     
-    vec3 bloom = MipMapBloom(colortex10, texCoord, texSize, BLUR_DIR);
+    vec3 bloom = MipMapBloom(colortex10, texCoord, texSize, BLOOM_BLUR_RADIUS, BLOOM_MIP_LEVELS, BLUR_DIR);
     gl_FragData[0] = vec4(bloom, 1.);
 }

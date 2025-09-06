@@ -170,23 +170,24 @@ vec2 BoxBlur2f(sampler2D tex, vec2 uv, float texSize, int blurSize, ivec2 blurDi
     return col / (blurSize * 2. + 1.);
 }
 
-vec3 MipMapBloom(sampler2D tex, vec2 uv, float texSize, ivec2 blurDir)
+vec3 MipMapBloom(sampler2D tex, vec2 uv, float texSize, int blurRadius, int mipLevels, ivec2 blurDir)
 {
     vec3 result = vec3(0.);
     float weightSum = 1.;
 
-    for (int i = 0; i <= 6; i++)        // Iterate mip levels
+    for (int i = 0; i <= mipLevels; i++)        // Iterate mip levels
     {
-        for (int j = -1; j <= 1; j++)   // Directional blur
+        for (int j = -blurRadius; j <= blurRadius; j++)   // Directional blur
         {
+            // float off = (j * 2. + .5) * texSize * exp2(i);
             float off = (j) * texSize * exp2(i);
             off += (-.5 * texSize) + (.5 * texSize * exp2(i));  // Counter the pixel offset
                                                                 // Not sure if accurate but seems to work
             vec3 sample = textureLod(tex, uv + (off * blurDir), i).rgb;
 
             // float weight = 1 / (i+1.);
-            float weight = exp(-abs(off * 10.)); // DIY weight function
-            // float weight = 1.;
+            // float weight = exp(-abs(off * 10.)); // DIY weight function
+            float weight = 1.;
 
             result += sample * weight;
             weightSum += weight;

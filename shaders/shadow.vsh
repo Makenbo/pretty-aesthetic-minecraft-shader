@@ -12,13 +12,15 @@ uniform mat4 modelViewMatrix;   // just return mat4(0.) in Iris.
 
 uniform mat4 shadowModelView;
 
+uniform float rainStrength;
+
 void main()
 {
     gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * gl_Vertex;
     // gl_Position = vec4(0.);
     
     vec3 worldToShadowUp = normalize((shadowModelView * vec4(0., 1., 0., 0.)).xyz);
-    ShadowDistortion(gl_Position.xyz, worldToShadowUp);
+    ShadowDistortion(gl_Position.xyz, worldToShadowUp, 1. - rainStrength);
 
     // gl_Position.xy = rotationMat2D(20) * gl_Position.xy;
 

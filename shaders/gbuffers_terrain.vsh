@@ -74,6 +74,8 @@ void main()
 
     pos += off * leaves;
     pos += off * grass * grassHeightMask;
+
+    normal = mix(normal, vec3(0., 1., 0.), grassHeightMask * grass); // Make grass point up for more rim lighting
     
     // color = vec4(vec3(grassHeightMask), 1.);
 
