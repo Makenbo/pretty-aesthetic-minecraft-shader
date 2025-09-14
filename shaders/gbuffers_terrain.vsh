@@ -18,13 +18,15 @@ varying vec2 lightmapCoords;
 uniform mat4 gbufferModelView;
 uniform mat4 gbufferModelViewInverse;
 
-uniform sampler2DShadow shadowtex1;   // Shadow space depth
+// uniform sampler2DShadow shadowtex1;   // Shadow space depth
 uniform sampler2D colortex10;   // Perlin Noise
 
 // uniform int frameCounter;
 uniform float frameTimeCounter;
 uniform vec3 cameraPosition;
 uniform ivec2 atlasSize;
+uniform float wetness;
+uniform float rainStrength;
 
 uniform mat4 shadowModelView;
 uniform mat4 shadowProjection;
@@ -53,11 +55,16 @@ void main()
     vec2 sampleUV = fract(worldPos.xz * .05) + fract(worldPos.y * .02) + vec2(frameTimeCounter * .2, 0.);
     vec3 offLowFreq = texture2D(colortex10, sampleUV).rgb * 2. - 1.;
     offLowFreq *= .2 * vec3(1., .5, 1.);
+    offLowFreq = mix(offLowFreq, offLowFreq * 2.5, rainStrength);
 
-    sampleUV = fract(worldPos.xz * .11) + fract(worldPos.y * .021) + vec2(frameTimeCounter * .5, 0.);
-    vec3 offHighFreq = texture2D(colortex10, sampleUV).rgb * 2. - 1.;
-    offHighFreq *= .05 * vec3(1., .5, 1.);
-    offHighFreq *= 0.;
+    vec3 offHighFreq = vec3(0.);
+    if (rainStrength > 0.)
+    {
+        sampleUV = fract(worldPos.xz * .061) + fract(worldPos.y * .021) + vec2(frameTimeCounter * .7286417, 0.);
+        offHighFreq = texture2D(colortex10, sampleUV).rgb * 2. - 1.;
+        offHighFreq *= .2 * vec3(1., .5, 1.);
+        offHighFreq *= rainStrength;
+    }
 
     vec3 off = offLowFreq + offHighFreq;
     // vec2 wave = sin((worldPos.xz + worldPos.zx) * .05 + frameTimeCounter * 1.5);

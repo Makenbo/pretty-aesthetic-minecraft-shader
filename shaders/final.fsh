@@ -30,6 +30,7 @@ uniform sampler2D depthtex2;    // LUT
 /// State uniforms -----------------------------------------------
 
 uniform float nightVision;
+uniform int frameCounter;
 uniform float viewWidth;
 uniform float viewHeight;
 
@@ -41,6 +42,19 @@ float VignetteMask(vec2 uv)
     float factor = pow(1.3 - length(vignetteUV), 4.);
     factor = 1.3 * factor / (factor + 1.);
     return clamp(factor, 0., 1.);
+}
+
+vec3 FilmGrain(vec2 uv, vec3 col)
+{
+    float grain = hash12(floor(uv * vec2(viewWidth, viewHeight) * .5) * (fract(frameCounter * .14567) + 1.));
+    grain -= .5;
+    float grainStrength = .1;
+    grainStrength *= colToLum(col+.1);
+    grain *= grainStrength;
+    vec3 result = col + grain;
+    result = clamp(result, vec3(0.), vec3(1.));
+
+    return result;
 }
 
 /// Main --------------------------------------------------
@@ -91,7 +105,12 @@ void main()
     #ifdef TONEMAPPING
         col = tonemap(col);
     #endif
-    
+
+    // Film grain
+    #ifdef FILM_GRAIN
+        col = FilmGrain(uv, col);
+    #endif
+
     // Gamma correction (linear to gamma 2.2)
     col = ToDisplay(col);
 

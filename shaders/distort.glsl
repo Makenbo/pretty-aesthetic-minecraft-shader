@@ -26,22 +26,40 @@ float sigmoidCurve(float x)
     return ((sigmoid - .5) * 1.3) + (.3 * x);
 }
 
-void ShadowDistortion(inout vec3 position, vec3 worldToShadowUp, float factor)
+vec3 GetDistortFac(vec3 pos)
 {
     // Higher resolution near player
     vec3 distortFac = vec3(1.);
-    distortFac.xy = vec2(mix(1., length(position.xy), .8));
+    distortFac.xy = vec2(mix(1., length(pos.xy), .8));
     // distortFac.xy = vec2(mix(1., length(position.xy), .1));
 
     // Higher shadow render distance
-    position.z *= .85;
+    distortFac.z = 1.2;
+    // pos.z *= distortFac.z;
 
     // Higher precision near player
-    distortFac.z = mix(1., length(position.z), .8);
+    // distortFac.z = mix(1., length(pos.z), .8);
     // position.z = sigmoidCurve(position.z);
+
+    return distortFac;
+}
+
+void ShadowDistortion(inout vec3 position, vec3 worldToShadowUp, float factor)
+{
+    // Higher resolution near player
+    vec3 distortFac = GetDistortFac(position);
     
     position /= mix(vec3(1.), distortFac, factor);
-    // rotate2D(position.xy, 3.1415*2.);
     
     position = lookAtMat(worldToShadowUp) * position;
+}
+
+void ShadowUnDistort(inout vec3 position, vec3 worldToShadowUp, float factor)
+{
+    // Higher resolution near player
+    vec3 distortFac = GetDistortFac(position);
+    
+    position *= mix(vec3(1.), distortFac, factor);
+    
+    position = inverse(lookAtMat(worldToShadowUp)) * position;
 }

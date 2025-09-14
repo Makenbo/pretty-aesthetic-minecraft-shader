@@ -83,6 +83,14 @@ float ditherGradNoise(vec2 uv)
     return fract(52.9829189*fract(0.06711056*uv.x + 0.00583715*uv.y));
 }
 
+// Dave Hoskins' sin-less hash
+float hash12(vec2 p)
+{
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 // Water --------------------------------------------------------------------------------
 
 float GetWaterFresnel(vec3 viewSpace, vec3 normal)

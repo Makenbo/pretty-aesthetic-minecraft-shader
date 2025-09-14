@@ -340,7 +340,13 @@ vec3 ShadowFilter(vec3 shadowCoord, float shadowDistScalar, float translucents, 
         for (int i = 0; i < SHADOW_FILTER_SAMPLES; i++)
         {
             vec2 off = rndRot * poissonDisk16[i] * blurScale;
-            vec3 sampleCoord = vec3(shadowCoord.xy + off, shadowCoord.z);
+            vec3 sampleCoord = vec3(shadowCoord.xy, shadowCoord.z);
+            sampleCoord = sampleCoord * 2. - 1.;
+            vec3 origSampleCoord = sampleCoord;
+            sampleCoord.xy *= GetDistortFac(origSampleCoord).xy;
+            sampleCoord.xy += off;
+            sampleCoord.xy /= GetDistortFac(origSampleCoord).xy;
+            sampleCoord = sampleCoord * .5 + .5;
             sampleCoord = clamp(sampleCoord, vec3(-1.), vec3(1.));
             result += SampleShadow(sampleCoord);
         }
@@ -681,7 +687,7 @@ void main()
     float worldYperlin = texture2D(colortex9, fract(worldStatic.xz * .003) + frameTimeCounter * .01).g + .3;
     float fogHeightMult = clamp(pow(-world.y * .01, 1.5), 0., .7) * step(world.y, 0); // not in 0-1 range
     fogHeightMult *= mix(1., worldXZperlin * worldYperlin, 1.);
-    fogHeightMult = mix(fogHeightMult * .2, fogHeightMult, smoothstep(.0, .25, lightmap.y + waterAndIce) * eyeSkyBrightnessFac); // Attenuate fog when not under skylight
+    // fogHeightMult = mix(fogHeightMult * .2, fogHeightMult, smoothstep(.0, .25, lightmap.y + waterAndIce) * eyeSkyBrightnessFac); // Attenuate fog when not under skylight
 
 
     // Brighten near the sun object
@@ -708,7 +714,7 @@ void main()
     fogFac = ReinhardtTonemap(fogFac * 4.) * 1.25;
     fogFac = min(fogFac, 1.);
 
-    shadowsFac *= smoothstep(.4, .0, fogFac * (1.-rainStrength)); // "diffuse" shadows in fog
+    shadowsFac *= smoothstep(.5, .0, fogFac * (1.-rainStrength)); // "diffuse" shadows in fog
 
     // Sky reflection
     vec3 skyReflDir = normalize(reflect(view, viewNormal));
@@ -812,7 +818,7 @@ void main()
     // col = vec3(texture2D(noisetex, uv * SCREEN_SIZE / BLUE_NOISE_SIZE).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(specular));
+        col = viewLayer(col, texCoord, vec3(texture2D(shadowtex0, uv).rrr));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */
