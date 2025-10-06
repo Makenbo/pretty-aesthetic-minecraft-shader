@@ -605,7 +605,7 @@ void main()
     
     float lightSourceTransitionMask = 1. - (2. * abs(dayNightFac - .5));
     shadowsFac *= 1. - lightSourceTransitionMask;
-    shadowsFac = mix(shadowsFac, 0., noonDimFac * .4);
+    shadowsFac = mix(shadowsFac, 0., noonDimFac * .4); // Make sunlight more ambient at noon and midnight
     shadowsFac = max(shadowsFac - (float(isEyeInWater) * 1.), 0.);
     // shadowsFac = max(shadowsFac - unlit.a, 0.);
 
@@ -829,6 +829,6 @@ void main()
     gl_FragData[4] = vec4(lightmapBlockCol, 1.); // Blocklight objects
 
     #if defined SKY_REFLECTIONS && defined SSR
-        gl_FragData[5] = vec4(skyReflection, fogFac) * waterAndIce; // Sky reflections for SSR
+        gl_FragData[5] = vec4(skyReflection, fogFac); // Sky reflections for SSR
     #endif
 }

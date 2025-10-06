@@ -49,7 +49,8 @@ void ShadowDistortion(inout vec3 position, vec3 worldToShadowUp, float factor)
     // Higher resolution near player
     vec3 distortFac = GetDistortFac(position);
     
-    position /= mix(vec3(1.), distortFac, factor);
+    position.xy /= mix(vec2(1.), distortFac.xy, factor);
+    position.z /= distortFac.z;
     
     position = lookAtMat(worldToShadowUp) * position;
 }
@@ -59,7 +60,8 @@ void ShadowUnDistort(inout vec3 position, vec3 worldToShadowUp, float factor)
     // Higher resolution near player
     vec3 distortFac = GetDistortFac(position);
     
-    position *= mix(vec3(1.), distortFac, factor);
+    position.xy *= mix(vec2(1.), distortFac.xy, factor);
+    position.z *= distortFac.z;
     
     position = inverse(lookAtMat(worldToShadowUp)) * position;
 }

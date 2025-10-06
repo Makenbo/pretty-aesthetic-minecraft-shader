@@ -44,16 +44,25 @@ float VignetteMask(vec2 uv)
     return clamp(factor, 0., 1.);
 }
 
+// Just modified white noise
 vec3 FilmGrain(vec2 uv, vec3 col)
 {
-    float grain = hash12(floor(uv * vec2(viewWidth, viewHeight) * .5) * (fract(frameCounter * .14567) + 1.));
+    const float grainSize = 2.; // In pixels
+    const float grainStrength = .04;
+
+    vec2 sampleUV = floor(uv * vec2(viewWidth, viewHeight) * 1. / grainSize);
+    float uvMult = fract(frameCounter * .14567);
+
+    vec3 grain = vec3 ( hash12(sampleUV * (uvMult + 1.)),
+                        hash12(sampleUV * (uvMult + 1.17234)),
+                        hash12(sampleUV * (uvMult + 1.73234))
+                 );
     grain -= .5;
-    float grainStrength = .1;
-    grainStrength *= colToLum(col+.1);
     grain *= grainStrength;
+    grain = mix(grain, grain * (1. - colToLum(col)), .4); // shadow bias
+
     vec3 result = col + grain;
     result = clamp(result, vec3(0.), vec3(1.));
-
     return result;
 }
 
@@ -106,13 +115,14 @@ void main()
         col = tonemap(col);
     #endif
 
+    // Gamma correction (linear to gamma 2.2)
+    col = ToDisplay(col);
+
     // Film grain
     #ifdef FILM_GRAIN
         col = FilmGrain(uv, col);
+        // col = blendOverlay(col, FilmGrain(uv, col));
     #endif
-
-    // Gamma correction (linear to gamma 2.2)
-    col = ToDisplay(col);
 
     // Apply look LUT
     #ifdef LUT

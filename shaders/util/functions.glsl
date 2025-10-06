@@ -75,6 +75,14 @@ vec3 decompressBufferRange(vec3 col)
     return col * 10.;
 }
 
+vec3 blendOverlay(vec3 dst, vec3 src)
+{
+    vec3 lights = 1. - 2. * (1. - src) * (1. - dst); // Screen
+    vec3 darks = 2 * src * dst; // Multiply
+
+    return mix(darks, lights, step(.5, dst));
+}
+
 // Other
 
 // Stolen from RRE36
