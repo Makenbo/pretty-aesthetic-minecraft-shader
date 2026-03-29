@@ -199,13 +199,13 @@ vec3 MipMapBloom(sampler2D tex, vec2 uv, float texSize, int blurRadius, int mipL
             float off = (j) * texSize * exp2(i);
             off += (-.5 * texSize) + (.5 * texSize * exp2(i));  // Counter the pixel offset
                                                                 // Not sure if accurate but seems to work
-            vec3 sample = textureLod(tex, uv + (off * blurDir), i).rgb;
+            vec3 texSample = textureLod(tex, uv + (off * blurDir), i).rgb;
 
             // float weight = 1 / (i+1.);
             // float weight = exp(-abs(off * 10.)); // DIY weight function
             float weight = 1.;
 
-            result += sample * weight;
+            result += texSample * weight;
             weightSum += weight;
         }
     }

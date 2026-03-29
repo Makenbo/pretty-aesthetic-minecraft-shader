@@ -178,10 +178,10 @@ vec3 BlurRenderPass(sampler2D tex, vec2 uv, sampler2D depthTex, float origDepth,
 
         // Add up
         // if (abs(myDepth - origDepth) < DEPTH_BLUR_MARGIN)
-        {
+        // {
             outCol += texture2D(tex, uv + off).xyz;
             weight++;
-        }
+        // }
     }
 
     return outCol / weight;
