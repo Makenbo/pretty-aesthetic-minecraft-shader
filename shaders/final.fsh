@@ -33,6 +33,7 @@ uniform float nightVision;
 uniform int frameCounter;
 uniform float viewWidth;
 uniform float viewHeight;
+uniform int biome_category;
 
 /// Overlays -----------------------------------------------
 
@@ -91,6 +92,8 @@ void main()
         // lumMask *= 1. - leaves;
 
         float shadowMult = mix(LOCAL_SHADOW_MULT, LOCAL_SHADOW_MULT_NIGHT_VISION, nightVision);
+        if (biome_category == CAT_NETHER)
+            shadowMult *= 2.;
         col = mix(col, col * shadowMult, lumMask);
     #endif
 
@@ -117,6 +120,8 @@ void main()
 
     // Gamma correction (linear to gamma 2.2)
     col = ToDisplay(col);
+
+    col = dither(col, uv*vec2(viewWidth, viewHeight), 6./256., frameCounter);
 
     // Film grain
     #ifdef FILM_GRAIN

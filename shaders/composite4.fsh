@@ -46,6 +46,7 @@ const vec3 warmLightSrcCol = vec3(1., .7, .2);
 // Fog
 #define FOG_DENSITY_INV 4.
 #define RAIN_FOG_DENSITY_INV 1.
+#define NETHER_FOG_DENSITY_INV 2.
 const vec3 sunFogCol = vec3(1.5, 1., 0.) * 1.;
 const vec3 moonFogCol = vec3(.2, .35, .7) * .5;
 const vec3 rainSunTintCol = vec3(.2, .35, .7) * .5;
@@ -69,7 +70,7 @@ const float ambientOcclusionLevel = 1.;
 
 // Water and ice
 #define ICE_DEPTH_COL vec3(.3, .5, 1.) * .6  // Ice doesn't have biome color, so just come up
-                                            // with something for the fog
+                                             // with something for the fog
 
 // Modifiable variables
 const int noiseTextureResolution = 128;
@@ -140,6 +141,7 @@ uniform int isEyeInWater;
 uniform float nightVision;
 uniform float rainStrength;
 uniform float wetness;
+uniform int biome_category;
 
 uniform mat4 gbufferModelView;
 uniform mat4 gbufferModelViewInverse;
@@ -624,7 +626,6 @@ void main()
     // lightmap.y = isEyeInWater == 0 ? pow(lightmap.y, 2.) : lightmap.y;
     // float torchLightDer = fwidth(lightmap.x);
 
-
     vec3 skyCol = mix(nightSkyCol, daySkyCol, dayNightFac);
     float ambientIntensity = mix(ambientMoonIntensity, ambientSunIntensity, dayNightFac);
     ambientIntensity = mix(ambientIntensity, rainSunIntensity, rainStrength);
@@ -662,6 +663,10 @@ void main()
     vec3 ambient = mix(overworldAmbient, rainAmbient, rainStrength);
     ambient = mix(undergroundAmbient, ambient, eyeSkyBrightnessFac);
     ambient *= screenBrightness * 2.;
+    if (biome_category == CAT_NETHER)
+        ambient *= 4.;
+    if (biome_category == CAT_THE_END)
+        ambient *= 2.;
     ambient = mix(ambient, ambient * NIGHT_VISION_AMBIENT_MULT, nightVision);
 
     // Water ---------------------------------------------------------
@@ -709,6 +714,7 @@ void main()
     float underwaterFogDepth = (viewDepthNoTrans - viewDepth) / far; // To get smoother fog transition on water surface (unneccessary in Iris I think)
     float densityInv = mix(FOG_DENSITY_INV, RAIN_FOG_DENSITY_INV, max(wetness, rainStrength));
     densityInv = mix(densityInv, NIGHT_VISION_FOG_DENSITY_INV, nightVision);
+    densityInv = mix(densityInv, NETHER_FOG_DENSITY_INV, biome_category == CAT_NETHER);
     float fogFac = pow(fogDepth + underwaterFogDepth*0.0, densityInv);
     fogFac = mix(fogFac, fogDepth * 2., fogHeightMult * fogLuma * (1. - nightVision*.9));
     fogFac = ReinhardtTonemap(fogFac * 4.) * 1.25;
@@ -793,7 +799,7 @@ void main()
     vec3 skyAlbedo = skyPass.rgb;
     skyAlbedo = mix(skyAlbedo.rgb, screenAddLight, sunTintFac); // Add sun tint
     col = mix(col, skyAlbedo, skyMask); // Seperate the sky
-    col = mix(col, col + albedo * 2., skyMask);
+    col = mix(col, col + albedo * 2., skyMask); // Adds sun and stars
 
     // Draw transparent objects -------------------------------------
 
@@ -818,7 +824,7 @@ void main()
     // col = vec3(texture2D(noisetex, uv * SCREEN_SIZE / BLUE_NOISE_SIZE).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(texture2D(shadowtex0, uv).rrr));
+        col = viewLayer(col, texCoord, vec3(ambient));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

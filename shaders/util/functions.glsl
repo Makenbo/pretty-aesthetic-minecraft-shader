@@ -99,6 +99,24 @@ float hash12(vec2 p)
     return fract((p3.x + p3.y) * p3.z);
 }
 
+vec3 dither(vec3 col, vec2 uv, float strength, float frameCnter)
+{
+    vec2 sampleUV = floor(uv);
+    float uvMult = fract(frameCnter * .14567);
+
+    vec3 noise = vec3 ( hash12(sampleUV * (uvMult + 1.)),
+                        hash12(sampleUV * (uvMult + 1.17234)),
+                        hash12(sampleUV * (uvMult + 1.73234))
+                 );
+
+    noise = noise * 2. - 1.;
+    noise *= strength / 2.;
+
+    vec3 result = col + noise;
+    result = clamp(result, vec3(0.), vec3(1.));
+    return result;
+}
+
 // Water --------------------------------------------------------------------------------
 
 float GetWaterFresnel(vec3 viewSpace, vec3 normal)

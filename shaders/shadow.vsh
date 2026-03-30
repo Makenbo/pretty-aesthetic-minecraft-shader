@@ -24,6 +24,6 @@ void main()
 
     // gl_Position.xy = rotationMat2D(20) * gl_Position.xy;
 
-    texCoord = gl_MultiTexCoord0.st;
+    texCoord = (gl_TextureMatrix[0] * gl_MultiTexCoord0).st;
     color = gl_Color;
 }

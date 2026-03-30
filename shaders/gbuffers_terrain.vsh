@@ -46,7 +46,7 @@ void main()
     /// Pass attributes prepare ------------------------------
 
     // Assign values to varying variables
-    texCoords = gl_MultiTexCoord0.st;
+    texCoords = (gl_TextureMatrix[0] * gl_MultiTexCoord0).st;
     color = gl_Color;
 
     /// Wind ----------------------------------------------

@@ -15,7 +15,7 @@ void main()
     gl_Position = ftransform();
 
     // Assign values to varying variables
-    texCoords = gl_MultiTexCoord0.st;
+    texCoords = (gl_TextureMatrix[0] * gl_MultiTexCoord0).st;
     normal = gl_NormalMatrix * gl_Normal;
     color = gl_Color;
 

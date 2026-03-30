@@ -49,11 +49,18 @@ void main()
     vec3 pos = screenToView(vec3(gl_FragCoord.xy / vec2(viewWidth, viewHeight), 1.0));
 
     vec4 skyCol = color;
+    // skyCol.a = .0;
     // skyCol.rgb = mix(skyCol.rgb, gl_Fog.color.rgb, min(gl_FogFragCoord * .005, 1.));
     // skyCol.rgb = mix(skyCol.rgb, color.rgb, 1. - color.a);
 
-    skyCol.rgb = mix(color.rgb, gl_Fog.color.rgb, clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
-    skyCol.rgb = mix(skyCol.rgb, calcSkyColor(normalize(pos)), clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
+    float fac = clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0., 1.);
+    // fac = pow(fac*2., .6);
+    fac *= 4.;
+    fac = (fac*1.1) / (fac+1.);
+    skyCol.rgb = mix(color.rgb, gl_Fog.color.rgb, fac);
+    skyCol.rgb = mix(skyCol.rgb, calcSkyColor(normalize(pos)), fac);
+    // skyCol.rgb += hash12();
+    // skyCol.rgba = vec4(vec3(fac), 1.);
 
     vec4 stars = vec4(0., 0., 0., 1.);
 
