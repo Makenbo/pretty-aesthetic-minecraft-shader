@@ -824,7 +824,7 @@ void main()
     // col = vec3(texture2D(noisetex, uv * SCREEN_SIZE / BLUE_NOISE_SIZE).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(ambient));
+        col = viewLayer(col, texCoord, vec3(lumMask));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

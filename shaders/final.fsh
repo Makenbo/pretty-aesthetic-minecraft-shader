@@ -3,6 +3,7 @@
 #include "shader_settings.glsl"
 #include "util/functions.glsl"
 #include "util/post_col.glsl"
+#include "util/tonemapping.glsl"
 #include "debug/debug_view.glsl"
 
 /// Constants -------------------------------------------------------
@@ -115,7 +116,8 @@ void main()
 
     // Tonemap (linear to linear)
     #ifdef TONEMAPPING
-        col = tonemap(col);
+        // col = tonemap(col);
+        col = OpenDRTransform(col);
     #endif
 
     // Gamma correction (linear to gamma 2.2)
