@@ -1,3 +1,45 @@
+// Conversions to/from DaVinci Wide Gamut Intermediate --------------
+
+float DI_linear(float l)
+{
+	if (l < 0.02740668) return l / 10.44426855;
+	return (pow(2., (l / 0.07329248) - 7.)) - .0075;
+}
+
+float linear_DI(float l)
+{
+	if (l < .00262409) return l * 10.44426855;
+	return (log2(l + .0075) + 7.) * .07329248;
+}
+
+vec3 DI_linear_v3(vec3 col)
+{
+    return vec3(DI_linear(col.r), DI_linear(col.g), DI_linear(col.b));
+}
+
+vec3 linear_DI_v3(vec3 col)
+{
+    return vec3(linear_DI(col.r), linear_DI(col.g), linear_DI(col.b));
+}
+
+// RGB to YCbCr, ranges [0, 1]
+//Source: https://github.com/tobspr/GLSL-Color-Spaces/blob/master/ColorSpaces.inc.glsl
+vec3 rgb_to_ycbcr(vec3 rgb) {
+    float y = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
+    float cb = (rgb.b - y) * 0.565;
+    float cr = (rgb.r - y) * 0.713;
+
+    return vec3(y, cb, cr);
+}
+
+// YCbCr to RGB
+vec3 ycbcr_to_rgb(vec3 yuv) {
+    return vec3(
+        yuv.x + 1.403 * yuv.z,
+        yuv.x - 0.344 * yuv.y - 0.714 * yuv.z,
+        yuv.x + 1.770 * yuv.y
+    );
+}
 
 // Gamma conversion ----------------------------------------
 
@@ -37,19 +79,25 @@ vec3 ReinhardtTonemap(vec3 col)
 float tonemap(float fac)
 {
     fac = pow(fac, 1.05);
-    return pow(fac / (fac + .41546), 1.27);
+    return pow(fac / (fac + .4323875), 1.27);
+}
+
+float tonemapInverse(float fac)
+{
+    fac = pow(fac, .952381) * .9999;
+    return pow((fac * .4323875) / (1. - fac), .952380952);
 }
 
 vec3 tonemap(vec3 col)
 {
     col = pow(col, vec3(1.05));
-    return pow(col / (col + .41546), vec3(1.27));
+    return pow(col / (col + .4323875), vec3(1.27));
 }
 
 vec3 tonemapInverse(vec3 col)
 {
     col = pow(col, vec3(.35714)) * .999;
-    return pow((col * .41546) / (1. - col), vec3(.90909));
+    return pow((col * .4323875) / (1. - col), vec3(.952380952));
 }
 
 // LUT ---------------------------------------------

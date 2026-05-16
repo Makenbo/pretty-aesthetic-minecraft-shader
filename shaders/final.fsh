@@ -25,6 +25,8 @@ uniform sampler2D colortex10;   // Bloom buffer
 /*
 const int colortex5Format = RGB16F;
 */
+const bool colortex5MipmapEnabled = true; // for exposure fusion
+
 
 uniform sampler2D depthtex2;    // LUT
 
@@ -35,6 +37,85 @@ uniform int frameCounter;
 uniform float viewWidth;
 uniform float viewHeight;
 uniform int biome_category;
+
+/// Exposure fusion --------------------------------------
+#define LEVELS 9
+#define EXPOSURES 3 // Must be an odd number
+#define ARR_SIZE LEVELS*EXPOSURES
+
+float gaussPyr[ARR_SIZE];
+float laplacianPyr[ARR_SIZE];
+
+float linear_to_remap(float lum)
+{
+    lum = pow(lum, 1./2.47393); // Choose exponent to ROUGHLY preserver middle gray
+    // lum = tonemap(lum);
+    return lum;
+}
+float remap_to_linear(float lum)
+{
+    // lum = tonemapInverse(lum);
+    lum = pow(lum, 2.47393);
+    return lum;
+}
+
+vec3 exposureFusion(sampler2D srcSampler, vec2 uv, float shadowEVboost)
+{
+    vec3 sourceCol = texture2D(srcSampler, uv).rgb;
+
+    // "Gaussian pyramid" made from mip levels
+    for (int level = 0; level < LEVELS; level++)
+    {
+        float sample = colToLum(textureLod(srcSampler, uv, level).rgb);
+        for (int remap = 0; remap < EXPOSURES; remap++)
+        {
+            int arrayIndex = level + remap*LEVELS;
+            // float exposure = (remap / float(EXPOSURES-1)) * 2. - 1.; // Remap to [-1,1]
+            float exposure = remap / float(EXPOSURES-1); // Remap to [0,1]
+            exposure = exp2(exposure * shadowEVboost);  // Use as EV units
+            gaussPyr[arrayIndex] = linear_to_remap(sample * exposure);
+        }
+    }
+
+    // "Laplacian pyramid" constructed from mip levels
+    for (int remap = 0; remap < EXPOSURES; remap++)
+        laplacianPyr[LEVELS-1 + remap*LEVELS] = gaussPyr[LEVELS-1 + remap*LEVELS];
+
+    for (int level = 0; level < LEVELS-1; level++)
+    {
+        for (int remap = 0; remap < EXPOSURES; remap++)
+        {
+            int arrayIndex = level + remap*LEVELS;
+            laplacianPyr[arrayIndex] = gaussPyr[arrayIndex] - gaussPyr[arrayIndex+1];
+        }
+    }
+    
+    // Image reconstruction
+    float resultLum = 0.;
+    for (int i = 0; i < LEVELS; i++)
+    {
+        // float weight = gaussPyr[i + LEVELS*int((EXPOSURES-1)/2)] * (EXPOSURES-1);
+        float weight = float(EXPOSURES-1) - (gaussPyr[LEVELS-1] * (EXPOSURES-1) * 1.5);
+        weight = clamp(weight, 0., float(EXPOSURES-1));
+        int upperID = int(ceil(weight));
+        int lowerID = int(floor(weight));
+        float interpFac = fract(weight);
+        
+        float upperSample = laplacianPyr[i + upperID*LEVELS];
+        float lowerSample = laplacianPyr[i + lowerID*LEVELS];
+        float combined = mix(lowerSample, upperSample, interpFac);
+
+        resultLum += combined;
+    }
+
+    resultLum = remap_to_linear(resultLum);
+
+    float sourceLum = colToLum(sourceCol);
+    float exposureDiff = resultLum / sourceLum;
+    vec3 result = sourceCol * exposureDiff;
+
+    return result;
+}
 
 /// Overlays -----------------------------------------------
 
@@ -87,15 +168,16 @@ void main()
         float lumMask = texture2D(colortex7, uv).r;
 
         // Ignore leaves
-        float entityID = texture2D(colortex3, uv).r;
-        int mat = int(entityID * 10000. + .5);
-        float leaves = mat == 31 ? 1. : 0.;
+        // float entityID = texture2D(colortex3, uv).r;
+        // int mat = int(entityID * 10000. + .5);
+        // float leaves = mat == 31 ? 1. : 0.;
         // lumMask *= 1. - leaves;
 
         float shadowMult = mix(LOCAL_SHADOW_MULT, LOCAL_SHADOW_MULT_NIGHT_VISION, nightVision);
         if (biome_category == CAT_NETHER)
             shadowMult *= 2.;
-        col = mix(col, col * shadowMult, lumMask);
+        // col = mix(col, col * shadowMult * 5., lumMask);
+        col = exposureFusion(colortex5, uv, shadowMult * .5);
     #endif
 
     // Bloom -----------------------------------------------
