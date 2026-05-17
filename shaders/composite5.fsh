@@ -65,6 +65,7 @@ vec3 calcSkyColor(vec3 pos)
 	return mix(skyColor, fogColor, fogify(max(upDot, 0.0), 0.25));
 }
 
+
 void main()
 {
     // Get necessary passes -------------------------------------

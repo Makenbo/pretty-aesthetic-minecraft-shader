@@ -8,8 +8,8 @@
 
 /// Constants -------------------------------------------------------
 
-#define LOCAL_SHADOW_MULT 2.
-#define LOCAL_SHADOW_MULT_NIGHT_VISION 5.
+// #define LOCAL_SHADOW_MULT 2.
+// #define LOCAL_SHADOW_MULT_NIGHT_VISION 5.
 
 /// Attributes -------------------------------------------------------
 
@@ -21,12 +21,13 @@ uniform sampler2D colortex3;    // Entity ID
 uniform sampler2D colortex5;    // Linear render
 uniform sampler2D colortex7;    // Blurred luma
 uniform sampler2D colortex10;   // Bloom buffer
+uniform sampler2D colortex8;    // Log adjusted buffer for exposure fusion
+uniform sampler2D colortex15;   // Exposure adjustment produced by exposure fusion
 
 /*
 const int colortex5Format = RGB16F;
 */
-const bool colortex5MipmapEnabled = true; // for exposure fusion
-
+const bool colortex8MipmapEnabled = true; // For exposure fusion
 
 uniform sampler2D depthtex2;    // LUT
 
@@ -37,85 +38,6 @@ uniform int frameCounter;
 uniform float viewWidth;
 uniform float viewHeight;
 uniform int biome_category;
-
-/// Exposure fusion --------------------------------------
-#define LEVELS 9
-#define EXPOSURES 3 // Must be an odd number
-#define ARR_SIZE LEVELS*EXPOSURES
-
-float gaussPyr[ARR_SIZE];
-float laplacianPyr[ARR_SIZE];
-
-float linear_to_remap(float lum)
-{
-    lum = pow(lum, 1./2.47393); // Choose exponent to ROUGHLY preserver middle gray
-    // lum = tonemap(lum);
-    return lum;
-}
-float remap_to_linear(float lum)
-{
-    // lum = tonemapInverse(lum);
-    lum = pow(lum, 2.47393);
-    return lum;
-}
-
-vec3 exposureFusion(sampler2D srcSampler, vec2 uv, float shadowEVboost)
-{
-    vec3 sourceCol = texture2D(srcSampler, uv).rgb;
-
-    // "Gaussian pyramid" made from mip levels
-    for (int level = 0; level < LEVELS; level++)
-    {
-        float sample = colToLum(textureLod(srcSampler, uv, level).rgb);
-        for (int remap = 0; remap < EXPOSURES; remap++)
-        {
-            int arrayIndex = level + remap*LEVELS;
-            // float exposure = (remap / float(EXPOSURES-1)) * 2. - 1.; // Remap to [-1,1]
-            float exposure = remap / float(EXPOSURES-1); // Remap to [0,1]
-            exposure = exp2(exposure * shadowEVboost);  // Use as EV units
-            gaussPyr[arrayIndex] = linear_to_remap(sample * exposure);
-        }
-    }
-
-    // "Laplacian pyramid" constructed from mip levels
-    for (int remap = 0; remap < EXPOSURES; remap++)
-        laplacianPyr[LEVELS-1 + remap*LEVELS] = gaussPyr[LEVELS-1 + remap*LEVELS];
-
-    for (int level = 0; level < LEVELS-1; level++)
-    {
-        for (int remap = 0; remap < EXPOSURES; remap++)
-        {
-            int arrayIndex = level + remap*LEVELS;
-            laplacianPyr[arrayIndex] = gaussPyr[arrayIndex] - gaussPyr[arrayIndex+1];
-        }
-    }
-    
-    // Image reconstruction
-    float resultLum = 0.;
-    for (int i = 0; i < LEVELS; i++)
-    {
-        // float weight = gaussPyr[i + LEVELS*int((EXPOSURES-1)/2)] * (EXPOSURES-1);
-        float weight = float(EXPOSURES-1) - (gaussPyr[LEVELS-1] * (EXPOSURES-1) * 1.5);
-        weight = clamp(weight, 0., float(EXPOSURES-1));
-        int upperID = int(ceil(weight));
-        int lowerID = int(floor(weight));
-        float interpFac = fract(weight);
-        
-        float upperSample = laplacianPyr[i + upperID*LEVELS];
-        float lowerSample = laplacianPyr[i + lowerID*LEVELS];
-        float combined = mix(lowerSample, upperSample, interpFac);
-
-        resultLum += combined;
-    }
-
-    resultLum = remap_to_linear(resultLum);
-
-    float sourceLum = colToLum(sourceCol);
-    float exposureDiff = resultLum / sourceLum;
-    vec3 result = sourceCol * exposureDiff;
-
-    return result;
-}
 
 /// Overlays -----------------------------------------------
 
@@ -149,6 +71,19 @@ vec3 FilmGrain(vec2 uv, vec3 col)
     return result;
 }
 
+float linear_to_remap(float lum)
+{
+    lum = pow(lum, 1./2.47393); // Choose exponent to ROUGHLY preserver middle gray
+    // lum = tonemap(lum);
+    return lum;
+}
+float remap_to_linear(float lum)
+{
+    // lum = tonemapInverse(lum);
+    lum = pow(lum, 2.47393);
+    return lum;
+}
+
 /// Main --------------------------------------------------
 
 void main()
@@ -173,11 +108,36 @@ void main()
         // float leaves = mat == 31 ? 1. : 0.;
         // lumMask *= 1. - leaves;
 
-        float shadowMult = mix(LOCAL_SHADOW_MULT, LOCAL_SHADOW_MULT_NIGHT_VISION, nightVision);
-        if (biome_category == CAT_NETHER)
-            shadowMult *= 2.;
+        // float shadowMult = mix(LOCAL_SHADOW_MULT, LOCAL_SHADOW_MULT_NIGHT_VISION, nightVision);
+        // if (biome_category == CAT_NETHER)
+        //     shadowMult *= 2.;
         // col = mix(col, col * shadowMult * 5., lumMask);
-        col = exposureFusion(colortex5, uv, shadowMult * .5);
+
+        // Exposure fusion
+        float adjustedLum = texture2D(colortex15, uv).r;    // Top 2 Laplacian levels are missing
+                                                            //  for optimization, add them now
+
+        // col = vec3(adjustedLum);
+        float gaussLevel0 = textureLod(colortex8, uv, 0).r;  // Too lazy to do a for loop
+        float gaussLevel1 = textureLod(colortex8, uv, 1).r;
+        float gaussLevel2 = textureLod(colortex8, uv, 2).r;
+        float laplacLevel0 = gaussLevel0 - gaussLevel1;
+        float laplacLevel1 = gaussLevel1 - gaussLevel2;
+
+        float adjustedLumCorrected = adjustedLum;
+        adjustedLumCorrected += laplacLevel0;
+        adjustedLumCorrected += laplacLevel1;
+        float sourceLum = colToLum(col);
+        float exposureDiff = adjustedLumCorrected / linear_to_remap(sourceLum);
+        adjustedLum += laplacLevel0 * exposureDiff;
+        adjustedLum += laplacLevel1 * exposureDiff;
+
+        adjustedLum = remap_to_linear(adjustedLum);
+        
+        exposureDiff = adjustedLum / sourceLum;
+        // exposureDiff = max(exposureDiff, 1.);   // This reduces some sharpening artifacts
+        // col = texture2D(colortex15, uv).rgb;
+        col *= exposureDiff;
     #endif
 
     // Bloom -----------------------------------------------
