@@ -14,9 +14,9 @@ varying vec2 texCoord;
 #define DAY_NIGHT_TRANSITION_TIME 500.
 
 // Lighting
-const float sunIntensity = 6.;
-const float ambientSunIntensity = 2.;
-const float moonIntensity = .6;
+const float sunIntensity = 9.;
+const float ambientSunIntensity = 6.;
+const float moonIntensity = .4;
 const float ambientMoonIntensity = 1.;
 const float dimmingAtNoon = .6;
 const float rainSunIntensity = 4.;
@@ -25,7 +25,8 @@ const vec3 sunCol = vec3(.85, 1., .7);
 // const vec3 sunCol = vec3(1.);
 const vec3 moonCol = vec3(.2, .35, 1.);
 const vec3 rainLightCol = vec3(.4, .6, 1.);
-const vec3 overworldAmbient = vec3(0.02, .045, .1) * .4;
+const vec3 overworldAmbientDay = vec3(0.02, .045, .1) * 1.5;
+const vec3 overworldAmbientNight = vec3(0.02, .045, .1) * .3;
 const vec3 undergroundAmbient = vec3(.03, .05, .08) * .6;
 const vec3 rainAmbient = vec3(0.02, .045, .1) * .5;
 const float rainSkylightFac = .4;
@@ -47,7 +48,7 @@ const vec3 warmLightSrcCol = vec3(1., .7, .2);
 #define FOG_DENSITY_INV 4.
 #define RAIN_FOG_DENSITY_INV 1.
 #define NETHER_FOG_DENSITY_INV 2.
-const vec3 sunFogCol = vec3(1.5, 1., 0.) * 1.;
+const vec3 sunFogCol = vec3(1.5, 1.1, 0.2) * 2.;
 const vec3 moonFogCol = vec3(.2, .35, .7) * .5;
 const vec3 rainSunTintCol = vec3(.2, .35, .7) * .5;
 const float undergroundFogDim = .2;
@@ -467,8 +468,12 @@ vec3 ShadowPass(vec3 worldPos, float shadowDistScalar, float translucents, float
 
 float GetSunTintFac(vec3 viewSpace)
 {
-    float sunTintFac = max(dot(shadowLightPosition * .01, normalize(viewSpace)), 0.);
-    sunTintFac = pow(sunTintFac, 7.) + (pow(sunTintFac, 1.8) * .3);
+    float sunTintFac = dot(shadowLightPosition * .01, normalize(viewSpace)) * .5 + .5;
+    sunTintFac = pow(sunTintFac, 50.) + (pow(sunTintFac, 5.) * .3);
+    // float sunTintFac = dot(shadowLightPosition * .01, normalize(viewSpace)) * .5 + .5;
+    // sunTintFac = 1. - sunTintFac;
+    // float sigma = .1;
+    // sunTintFac = exp(-(sunTintFac*sunTintFac) / (2.*sigma*sigma));
 
     return sunTintFac;
 }
@@ -607,7 +612,7 @@ void main()
     
     float lightSourceTransitionMask = 1. - (2. * abs(dayNightFac - .5));
     shadowsFac *= 1. - lightSourceTransitionMask;
-    shadowsFac = mix(shadowsFac, 0., noonDimFac * .4); // Make sunlight more ambient at noon and midnight
+    // shadowsFac = mix(shadowsFac, 0., noonDimFac * .4); // Make sunlight more ambient at noon and midnight
     shadowsFac = max(shadowsFac - (float(isEyeInWater) * 1.), 0.);
     // shadowsFac = max(shadowsFac - unlit.a, 0.);
 
@@ -660,7 +665,8 @@ void main()
 
 
     // Ambient light
-    vec3 ambient = mix(overworldAmbient, rainAmbient, rainStrength);
+    vec3 ambient = mix(overworldAmbientNight, overworldAmbientDay, dayNightFac);
+    ambient = mix(ambient, rainAmbient, rainStrength);
     ambient = mix(undergroundAmbient, ambient, eyeSkyBrightnessFac);
     ambient *= screenBrightness * 2.;
     if (biome_category == CAT_NETHER)
@@ -824,7 +830,7 @@ void main()
     // col = vec3(texture2D(noisetex, uv * SCREEN_SIZE / BLUE_NOISE_SIZE).rgb);
     // col = fract(vec3(world + fract(cameraPosition)));
     #ifdef SHOW_DEBUG_WINDOW
-        col = viewLayer(col, texCoord, vec3(lumMask));
+        col = viewLayer(col, texCoord, vec3(dayNightFac));
     #endif
 
     /* RENDERTARGETS:5,1,6,8,9,13 */

@@ -25,7 +25,7 @@ uniform sampler2D colortex8;    // Log adjusted buffer for exposure fusion
 uniform sampler2D colortex15;   // Exposure adjustment produced by exposure fusion
 
 /*
-const int colortex5Format = RGB16F;
+const int colortex5Format = R11F_G11F_B10F;
 */
 const bool colortex8MipmapEnabled = true; // For exposure fusion
 

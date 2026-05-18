@@ -29,7 +29,7 @@ uniform int biome_category;
 
 /// Exposure fusion ------------------------------------------
 
-#define LOCAL_SHADOW_MULT 1.
+#define LOCAL_SHADOW_MULT 1.5
 #define LOCAL_SHADOW_MULT_NIGHT_VISION 4.
 
 #define LEVELS 8
