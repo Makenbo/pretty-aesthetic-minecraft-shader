@@ -2,6 +2,7 @@
 
 #include "distort.glsl"
 #include "util/functions.glsl"
+#include "shader_settings.glsl"
 
 // Attributes
 
@@ -42,6 +43,9 @@ void main()
     vec3 pos = vertexPos.xyz;
 
     int mat = int(mc_Entity.x + .5);
+    float grass = mat == 30 ? 1. : 0.;
+    float leaves = mat == 31 || mat == 32 ? 1. : 0.;
+    float grassHeightMask = 1.;
 
     /// Pass attributes prepare ------------------------------
 
@@ -51,6 +55,7 @@ void main()
 
     /// Wind ----------------------------------------------
 
+#ifdef WIND
     vec3 worldPos = pos + cameraPosition.xyz;
     vec2 sampleUV = fract(worldPos.xz * .05) + fract(worldPos.y * .02) + vec2(frameTimeCounter * .2, 0.);
     vec3 offLowFreq = texture2D(colortex10, sampleUV).rgb * 2. - 1.;
@@ -72,15 +77,13 @@ void main()
     // wave *= vec2(.05, .1) * 5.;
     // off.xy += wave;
 
-    float grassHeightMask = 1. - fract(texCoords.y * atlasSize.y);
+    grassHeightMask = 1. - fract(texCoords.y * atlasSize.y);
     grassHeightMask = (grassHeightMask - .3) * 5.;
     grassHeightMask = clamp(grassHeightMask, 0., 1.);
-    
-    float grass = mat == 30 ? 1. : 0.;
-    float leaves = mat == 31 || mat == 32 ? 1. : 0.;
 
     pos += off * leaves;
     pos += off * grass * grassHeightMask;
+#endif
 
     normal = mix(normal, vec3(0., 1., 0.), grassHeightMask * grass); // Make grass point up for more rim lighting
     
