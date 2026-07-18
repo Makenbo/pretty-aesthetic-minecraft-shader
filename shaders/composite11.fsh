@@ -10,6 +10,7 @@
 #define DOWNRES_FAC .25
 const ivec2 BLUR_DIR = ivec2(0, 1);
 
+
 /// Attributes -------------------------------------------------------
 
 varying vec2 texCoord;
@@ -20,7 +21,7 @@ uniform sampler2D colortex7;     // Low res luma mask to blur
 uniform sampler2D colortex8;     // full res corrected depth
 
 /*
-const int colortex7Format = R8;
+const int colortex7Format = R16F;
 const int colortex8Format = R16F;
 */
 
@@ -35,7 +36,8 @@ void main()
     /* RENDERTARGETS:7 */
 
     #ifdef LOCAL_TONE_MAPPING
-        float lum = GaussDepthBlur1f(colortex7, colortex8, texCoord, texSize, BLUR_DIR);
+        // float lum = GaussDepthBlur1f(colortex7, colortex8, texCoord, texSize, BLUR_DIR);
+        float lum = GaussBlur1f(colortex7, texCoord, texSize, BLUR_DIR);
         gl_FragData[0] = vec4(lum, 0., 0., 1.);
     #endif
 }

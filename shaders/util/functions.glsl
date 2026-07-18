@@ -191,6 +191,21 @@ vec3 GaussBlur3f(sampler2D colTex, vec2 uv, float texSize, ivec2 blurDir)
     return col / weightSum;
 }
 
+float GaussBlur1f(sampler2D colTex, vec2 uv, float texSize, ivec2 blurDir)
+{
+    float lum = 0.;
+    float weightSum = 0.;
+
+    for (int i = -8; i < 9; i++)
+    {
+        vec2 off = texSize * blurDir * (i * 2. - .5);
+        lum += texture2D(colTex, uv + off).r * gauss9[int(abs(i))];
+        weightSum += gauss9[int(abs(i))];
+    }
+
+    return lum / weightSum;
+}
+
 vec2 BoxBlur2f(sampler2D tex, vec2 uv, float texSize, int blurSize, ivec2 blurDir)
 {
     vec2 col = vec2(0.);

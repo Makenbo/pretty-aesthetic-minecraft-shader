@@ -151,6 +151,19 @@ void main()
 
     // Post --------------------------------------------------------
 
+    #ifdef LOCAL_TONE_MAPPING
+        vec3 midtoneCon = linear_DI_v3(col);
+        float lum = colToLum(midtoneCon);
+        float maxGamma = MapRange(LOCAL_CONTRAST, 0., 1., 1., 4.);
+        float gamma = mix(1., maxGamma, smoothstep(.1, .4, lum));
+        float lumCurve = contrastCurve(lum, gamma, lumMask);
+        float expMultDiff = lumCurve / (lum + 1e-10);
+        col *= expMultDiff;
+        // midtoneCon = contrastCurve3f(midtoneCon, 1.4, lumMask);
+        // col = DI_linear_v3(midtoneCon);
+        // col = vec3(smoothstep(.1, .4, lum));
+    #endif
+
     // Vignette
     #ifdef VIGNETTE
         col *= VignetteMask(uv);
@@ -180,7 +193,7 @@ void main()
 
     // Debug -------------------------------------------
 
-    // col = viewLayer(col, texCoord, vec3(ToDisplay(tonemap(bloom))));
+    // col = viewLayer(col, texCoord, vec3(lumMask));
     // col = vec3(lumMask);
 
     /* RENDERTARGETS:0 */

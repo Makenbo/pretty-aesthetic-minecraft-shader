@@ -18,7 +18,7 @@ uniform sampler2D colortex6; // Luma mask to downscale
 uniform sampler2D colortex9; // Blocklight color to downscale
 
 /*
-const int colortex6Format = R8;
+const int colortex6Format = R16F;
 const int colortex9Format = RGB8;
 */
 

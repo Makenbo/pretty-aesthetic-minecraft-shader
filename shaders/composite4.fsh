@@ -814,12 +814,13 @@ void main()
     // Prepare luma mask for local tone mapping ----------------------------------
 
     float lumMask = colToLum(col); // Convert to black and white
-    lumMask *= 4.; // Move gray very roughly closer to the middle gray
-    lumMask = ReinhardtTonemap(lumMask); // Compress range, so 8-bit buffer would be enough
-    lumMask = 1. - lumMask; // Make mask show the shadows
-    lumMask = pow(lumMask, 20.);
-    lumMask = mix(lumMask, 0., min(leaves + skyMask, 1.)); // Ignore leaves and sky
-    lumMask = max(lumMask, 0.);
+    lumMask = linear_DI(lumMask);
+    // lumMask *= 4.; // Move gray very roughly closer to the middle gray
+    // lumMask = ReinhardtTonemap(lumMask); // Compress range, so 8-bit buffer would be enough
+    // lumMask = 1. - lumMask; // Make mask show the shadows
+    // lumMask = pow(lumMask, 20.);
+    // lumMask = mix(lumMask, 0., min(leaves + skyMask, 1.)); // Ignore leaves and sky
+    // lumMask = max(lumMask, 0.0001);
 
     // lightingNoAlbedo = mix(lightingNoAlbedo, vec3(1.), skyMask);
 

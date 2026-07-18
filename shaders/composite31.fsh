@@ -55,20 +55,6 @@ float remap_to_linear(float lum)
     return lum;
 }
 
-// https://www.desmos.com/calculator/u7xzpm1je9?lang=cs
-float contrastCurve(float lum, float gamma, float pivot)
-{
-    lum = max(lum, 1e-8);   // Avoid undefined pow()
-
-    float toe = pivot * pow((1/pivot) * lum, gamma);
-    float shoulder = gamma * (lum - pivot) + pivot;
-    // float shoulder = gamma * lum;
-
-    // return shoulder;
-    return mix(toe, shoulder, step(pivot, lum));
-    // return toe;
-}
-
 void main()
 {
     // Evaulate shadow boost

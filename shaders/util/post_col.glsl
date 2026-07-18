@@ -76,6 +76,12 @@ vec3 ReinhardtTonemap(vec3 col)
     return col / (col + 1.0);
 }
 
+float ReinhardtInverse(float lum)
+{
+    lum = pow(lum, .35714) * .999;
+    return pow((lum * .4323875) / (1. - lum), .952380952);
+}
+
 float tonemap(float fac)
 {
     fac = pow(fac, 1.05);
@@ -99,6 +105,31 @@ vec3 tonemapInverse(vec3 col)
     col = pow(col, vec3(.35714)) * .999;
     return pow((col * .4323875) / (1. - col), vec3(.952380952));
 }
+
+
+// Global filters ---------------------------------------------
+
+// https://www.desmos.com/calculator/u7xzpm1je9?lang=cs
+float contrastCurve(float lum, float gamma, float pivot)
+{
+    lum = max(lum, 1e-8);   // Avoid undefined pow()
+
+    float toe = pivot * pow((1/pivot) * lum, gamma);
+    float shoulder = gamma * (lum - pivot) + pivot;
+    // float shoulder = gamma * lum;
+
+    // return shoulder;
+    return mix(toe, shoulder, step(pivot, lum));
+    // return toe;
+}
+
+vec3 contrastCurve3f(vec3 col, float gamma, float pivot)
+{
+    return vec3(contrastCurve(col.r, gamma, pivot),
+                contrastCurve(col.g, gamma, pivot),
+                contrastCurve(col.b, gamma, pivot) );
+}
+
 
 // LUT ---------------------------------------------
 

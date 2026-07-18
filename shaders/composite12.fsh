@@ -31,7 +31,8 @@ void main()
     /* RENDERTARGETS:7 */
     
     #ifdef LOCAL_TONE_MAPPING
-        float lum = GaussDepthBlur1f(colortex7, colortex8, texCoord, texSize, BLUR_DIR);
+        // float lum = GaussDepthBlur1f(colortex7, colortex8, texCoord, texSize, BLUR_DIR);
+        float lum = GaussBlur1f(colortex7, texCoord, texSize, BLUR_DIR);
         gl_FragData[0] = vec4(lum, 0., 0., 1.);
     #endif
 }
